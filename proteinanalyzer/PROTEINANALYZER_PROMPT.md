@@ -49,7 +49,7 @@ pf protein-info <識別子> --output <出力JSONファイル>
   - `comments`(`commentType == "FUNCTION"`の最初のテキスト → `function`、`commentType == "DISEASE"`の`disease.diseaseId`一覧 → `diseases`)
   - `features`(`type`別に`Active site`/`Binding site`/`Disulfide bond`/`Glycosylation`/`Modified residue`/`Transmembrane`/`Signal`/`Domain`を抽出。`location.start.value`/`end.value`を使用)
   - `keywords[].name` → `keywords`
-  - `uniProtKBCrossReferences`(`database == "PDB"` → `pdb_ids`、`database == "AlphaFoldDB"`の最初のid → `alphafold_id`)
+  - `uniProtKBCrossReferences`(`database == "PDB"`のエントリを`pdb_structures`(`id`/`properties`の`Method`/`Resolution`を抽出した`method`/`resolution`)に、`database == "AlphaFoldDB"`の最初のid → `alphafold_id`)
 - `fetch_protein_info(accession)`: 上記2関数をまとめた入口。
 
 ## 実装ファイル

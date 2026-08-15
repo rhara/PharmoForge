@@ -34,12 +34,19 @@ def _first_comment_text(entry: dict, comment_type: str) -> str | None:
     return None
 
 
+def _xref_property(xref: dict, key: str) -> str | None:
+    for prop in xref.get("properties", []):
+        if prop.get("key") == key:
+            return prop.get("value")
+    return None
+
+
 def extract_protein_info(entry: dict) -> dict:
     """UniProtの生エントリJSONから、創薬関連情報を平坦なdictに整理する。
 
     抽出項目: 配列・生物種・遺伝子/蛋白質名・機能概要・EC番号・活性部位/結合部位残基・
     翻訳後修飾(ジスルフィド結合・糖鎖化・修飾残基)・領域情報(膜貫通領域・シグナルペプチド・
-    ドメイン)・キーワード・疾患関連情報・PDB構造/AlphaFold DBの相互参照。
+    ドメイン)・キーワード・疾患関連情報・PDB構造(ID・測定手法・分解能)/AlphaFold DBの相互参照。
     """
     protein_desc = entry.get("proteinDescription", {})
     recommended = protein_desc.get("recommendedName", {})
@@ -92,7 +99,15 @@ def extract_protein_info(entry: dict) -> dict:
     keywords = [k["name"] for k in entry.get("keywords", [])]
 
     xrefs = entry.get("uniProtKBCrossReferences", [])
-    pdb_ids = [x["id"] for x in xrefs if x["database"] == "PDB"]
+    pdb_structures = [
+        {
+            "id": x["id"],
+            "method": _xref_property(x, "Method"),
+            "resolution": _xref_property(x, "Resolution"),
+        }
+        for x in xrefs
+        if x["database"] == "PDB"
+    ]
     alphafold_ids = [x["id"] for x in xrefs if x["database"] == "AlphaFoldDB"]
 
     return {
@@ -117,7 +132,7 @@ def extract_protein_info(entry: dict) -> dict:
         "transmembrane_regions": transmembrane_regions,
         "signal_peptide": signal_peptides[0] if signal_peptides else None,
         "domains": domains,
-        "pdb_ids": pdb_ids,
+        "pdb_structures": pdb_structures,
         "alphafold_id": alphafold_ids[0] if alphafold_ids else None,
     }
 

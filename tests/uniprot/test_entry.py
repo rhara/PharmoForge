@@ -45,8 +45,20 @@ SAMPLE_ENTRY = {
     ],
     "keywords": [{"name": "ATP-binding"}, {"name": "3D-structure"}],
     "uniProtKBCrossReferences": [
-        {"database": "PDB", "id": "1IVO"},
-        {"database": "PDB", "id": "1M14"},
+        {
+            "database": "PDB",
+            "id": "1IVO",
+            "properties": [
+                {"key": "Method", "value": "X-ray"},
+                {"key": "Resolution", "value": "3.30 A"},
+                {"key": "Chains", "value": "A/B=25-646"},
+            ],
+        },
+        {
+            "database": "PDB",
+            "id": "2GS6",
+            "properties": [{"key": "Method", "value": "NMR"}, {"key": "Chains", "value": "A=696-1022"}],
+        },
         {"database": "AlphaFoldDB", "id": "P00533"},
         {"database": "STRING", "id": "9606.ENSP00000275493"},
     ],
@@ -77,7 +89,10 @@ def test_extract_protein_info_parses_all_fields():
     assert info["transmembrane_regions"] == [{"start": 646, "end": 668, "description": "Helical"}]
     assert info["signal_peptide"] == {"start": 1, "end": 24}
     assert info["domains"] == [{"start": 712, "end": 979, "description": "Protein kinase"}]
-    assert info["pdb_ids"] == ["1IVO", "1M14"]
+    assert info["pdb_structures"] == [
+        {"id": "1IVO", "method": "X-ray", "resolution": "3.30 A"},
+        {"id": "2GS6", "method": "NMR", "resolution": None},
+    ]
     assert info["alphafold_id"] == "P00533"
 
 
@@ -103,7 +118,7 @@ def test_extract_protein_info_handles_missing_optional_fields():
     assert info["diseases"] == []
     assert info["signal_peptide"] is None
     assert info["alphafold_id"] is None
-    assert info["pdb_ids"] == []
+    assert info["pdb_structures"] == []
 
 
 @patch("uniprot.entry.requests.get")

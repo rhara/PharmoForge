@@ -38,7 +38,7 @@ UniProt REST APIのエントリJSONから、以下の項目を抽出したJSON�
 | `transmembrane_regions` | 膜貫通領域(範囲・説明) |
 | `signal_peptide` | シグナルペプチド領域(範囲、なければ`null`) |
 | `domains` | 機能ドメイン(範囲・説明) |
-| `pdb_ids` | 相互参照されているPDB構造ID一覧 |
+| `pdb_structures` | 相互参照されているPDB構造の一覧(各要素: `id`/`method`(測定手法、例: X-ray, NMR, EM)/`resolution`(分解能、例: `"3.30 A"`。NMR等で分解能情報がない場合は`null`)) |
 | `alphafold_id` | AlphaFold DBエントリID(なければ`null`) |
 
 天然変異(natural variant)・変異導入実験(mutagenesis)等は現時点で対象外(必要になった時点で拡張)。

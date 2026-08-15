@@ -88,7 +88,7 @@ UniProtエントリの取得と、創薬(構造生物学・メディシナルケ
 | 関数 | 説明 |
 | --- | --- |
 | `fetch_entry(accession: str) -> dict` | UniProt accessionの生エントリJSON(UniProt REST API)を取得する。 |
-| `extract_protein_info(entry: dict) -> dict` | 生エントリJSONから創薬関連情報を平坦なdictに整理する。抽出項目: `accession`/`entry_name`/`protein_name`/`gene_name`/`organism`/`taxon_id`/`sequence`/`length`/`mol_weight`/`ec_numbers`/`function`/`keywords`/`diseases`/`active_sites`/`binding_sites`/`disulfide_bonds`/`glycosylation_sites`/`modified_residues`/`transmembrane_regions`/`signal_peptide`/`domains`/`pdb_ids`/`alphafold_id`。 |
+| `extract_protein_info(entry: dict) -> dict` | 生エントリJSONから創薬関連情報を平坦なdictに整理する。抽出項目: `accession`/`entry_name`/`protein_name`/`gene_name`/`organism`/`taxon_id`/`sequence`/`length`/`mol_weight`/`ec_numbers`/`function`/`keywords`/`diseases`/`active_sites`/`binding_sites`/`disulfide_bonds`/`glycosylation_sites`/`modified_residues`/`transmembrane_regions`/`signal_peptide`/`domains`/`pdb_structures`(id/method/resolution)/`alphafold_id`。 |
 | `fetch_protein_info(accession: str) -> dict` | `fetch_entry` + `extract_protein_info` をまとめた入口。 |
 
 ## `src/molscaffold`
