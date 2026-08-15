@@ -11,6 +11,7 @@ dependencies = [
     "requests",
     "click",
     "rdkit>=2026.03.5",
+    "chembl_structure_pipeline",
 ]
 
 [project.optional-dependencies]

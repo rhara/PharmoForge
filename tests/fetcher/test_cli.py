@@ -11,6 +11,10 @@ def test_fetch_activities_dispatch(tmp_path):
     with (
         patch("fetcher.cli.resolve_chembl_target_id", return_value="CHEMBL331") as mock_resolve,
         patch("fetcher.cli.chembl.fetch_activities", return_value=[{"molecule_chembl_id": "CHEMBL1"}]) as mock_fetch,
+        patch(
+            "fetcher.cli.chembl.standardize_and_aggregate",
+            return_value=[{"smiles": "CCO"}],
+        ) as mock_aggregate,
         patch("fetcher.cli.chembl.write_activities_tsv") as mock_write,
     ):
         result = runner.invoke(fetch_cmd, ["activities=CDK4_HUMAN", "--output", str(output)])
@@ -18,7 +22,8 @@ def test_fetch_activities_dispatch(tmp_path):
     assert result.exit_code == 0, result.output
     mock_resolve.assert_called_once_with("CDK4_HUMAN")
     mock_fetch.assert_called_once_with("CHEMBL331")
-    mock_write.assert_called_once()
+    mock_aggregate.assert_called_once_with([{"molecule_chembl_id": "CHEMBL1"}])
+    mock_write.assert_called_once_with([{"smiles": "CCO"}], output)
 
 
 def test_fetch_structure_dispatch_infers_format(tmp_path):

@@ -30,9 +30,12 @@
 | --- | --- |
 | `src/core` | 汎用ユーティリティ(verboseなログ出力等) |
 | `src/idmap` | 蛋白識別子マッピング(UniProt entry name / accession / ChEMBL target id相互変換)。当初`fetcher`固有だったが横断的な技術要素として独立させた |
-| `src/fetcher` | ChEMBLからの活性データ取得、RCSB PDBからの構造データ取得([詳細](fetcher/README.md)) |
+| `src/molstd` | 化合物構造の標準化([ChEMBL Structure Pipeline](https://github.com/chembl/ChEMBL_Structure_Pipeline)に倣う)。当初`fetcher`固有だったが横断的な技術要素として独立させた |
+| `src/fetcher` | ChEMBLからの活性データ取得(標準化・pChEMBL値の集約込み)、RCSB PDBからの構造データ取得([詳細](fetcher/README.md)) |
 
 `pf`コマンド自体は`src/core/cli.py`のclickグループが起点となり、各機能パッケージがサブコマンドを登録する。
+
+汎用パッケージ(`core`/`idmap`/`molstd`等)の関数一覧は[API.md](API.md)を参照。
 
 ## 依存パッケージ
 

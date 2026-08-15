@@ -1,30 +1,26 @@
 """ChEMBL REST APIから活性データ(requestsベース、chembl_webresource_client不使用)を取得する。"""
 
 import csv
+import statistics
+from collections import defaultdict
 from pathlib import Path
 
 import requests
 
 from core.logging_utils import get_logger
+from molstd import standardize_smiles
 
 logger = get_logger(__name__)
 
 CHEMBL_ACTIVITY_URL = "https://www.ebi.ac.uk/chembl/api/data/activity.json"
 CHEMBL_ORIGIN = "https://www.ebi.ac.uk"
 
-ACTIVITY_FIELDS = [
-    "molecule_chembl_id",
-    "canonical_smiles",
-    "target_chembl_id",
-    "target_pref_name",
-    "standard_type",
-    "standard_relation",
-    "standard_value",
-    "standard_units",
-    "pchembl_value",
-    "assay_chembl_id",
-    "assay_description",
-    "document_chembl_id",
+AGGREGATED_FIELDS = [
+    "smiles",
+    "_median",
+    "_mean",
+    "_sd",
+    "_n",
 ]
 
 
@@ -57,12 +53,58 @@ def fetch_activities(target_chembl_id: str, page_size: int = 1000) -> list[dict]
     return records
 
 
+def standardize_and_aggregate(records: list[dict]) -> list[dict]:
+    """化合物構造をChEMBL Structure Pipelineに倣って標準化し、
+    標準化後の構造が同じ化合物のpChEMBL値をmean/median/sdに集約する。
+    """
+    logger.info("Standardizing structures and aggregating pChEMBL values ...")
+    groups: dict[str, list[float]] = defaultdict(list)
+    skipped = 0
+
+    for record in records:
+        smiles = record.get("canonical_smiles")
+        pchembl_raw = record.get("pchembl_value")
+        if not smiles or pchembl_raw is None:
+            skipped += 1
+            continue
+        try:
+            pchembl_value = float(pchembl_raw)
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+
+        std_smiles = standardize_smiles(smiles)
+        if std_smiles is None:
+            skipped += 1
+            continue
+
+        groups[std_smiles].append(pchembl_value)
+
+    if skipped:
+        logger.info("  skipped %d records (missing/invalid SMILES or pChEMBL value)", skipped)
+    logger.info("  %d unique standardized compounds", len(groups))
+
+    aggregated = []
+    for std_smiles, values in groups.items():
+        aggregated.append(
+            {
+                "smiles": std_smiles,
+                "_median": round(statistics.median(values), 3),
+                "_mean": round(statistics.mean(values), 3),
+                "_sd": round(statistics.stdev(values), 3) if len(values) >= 2 else "",
+                "_n": len(values),
+            }
+        )
+    aggregated.sort(key=lambda row: row["_median"], reverse=True)
+    return aggregated
+
+
 def write_activities_tsv(records: list[dict], output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     logger.info("Writing %d records to %s ...", len(records), output)
     with output.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
-            f, fieldnames=ACTIVITY_FIELDS, delimiter="\t", extrasaction="ignore", restval=""
+            f, fieldnames=AGGREGATED_FIELDS, delimiter="\t", extrasaction="ignore", restval=""
         )
         writer.writeheader()
         for record in records:

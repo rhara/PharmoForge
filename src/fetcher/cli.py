@@ -46,7 +46,8 @@ def fetch_cmd(spec: str, output: Path, fmt: str | None):
     if data_type == "activities":
         target_chembl_id = resolve_chembl_target_id(value)
         records = chembl.fetch_activities(target_chembl_id)
-        chembl.write_activities_tsv(records, output)
+        aggregated = chembl.standardize_and_aggregate(records)
+        chembl.write_activities_tsv(aggregated, output)
     elif data_type == "structure":
         structures.fetch_structure(value, output, fmt=fmt)
     elif data_type == "structures":
