@@ -32,7 +32,7 @@
 | `entry_name_to_accession(entry_name: str) -> str` | UniProt entry name(例: `CDK4_HUMAN`)をaccession(例: `P11802`)に変換する(UniProt REST APIを使用)。 |
 | `accession_to_chembl_target_id(accession: str) -> str` | UniProt accessionをChEMBL target id(例: `CHEMBL331`)に変換する(ChEMBL REST APIを使用)。 |
 | `resolve_chembl_target_id(identifier: str) -> str` | UniProt entry name / accession / ChEMBL target idのいずれを与えてもChEMBL target idを返す(上記3関数を組み合わせた入口)。 |
-| `resolve_uniprot_accession(identifier: str) -> str` | UniProt entry name / accessionのいずれを与えてもUniProt accessionを返す(`fetcher`の`structure-af=`/`structures-af=`が使用)。 |
+| `resolve_uniprot_accession(identifier: str) -> str` | UniProt entry name / accessionのいずれを与えてもUniProt accessionを返す(`fetcher`の`structure=`/`structures=` `--af`指定時が使用)。 |
 
 現時点では「識別子 → ChEMBL target id」「識別子 → UniProt accession」の方向のみ実装。逆方向の解決が他機能で必要になった時点で追加する。
 

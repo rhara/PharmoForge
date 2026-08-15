@@ -28,34 +28,26 @@ pf fetch activities=CDK4_HUMAN --output data/cdk4_human_activities.tsv
 行は`_median`の降順にソートされる。
 SMILESがパースできない、またはpChEMBL値が欠損している記録は集約対象から除外する(除外数はログに表示)。
 
-### 構造データの取得(RCSB PDB)
+### 構造データの取得(RCSB PDB / AlphaFold DB)
 
 単体取得。`--type`(`cif`/`pdb`)でフォーマットを明示できる。省略時は出力ファイルの拡張子(`.cif` / `.pdb`)から推定する。
+既定の取得元はRCSB PDB(識別子はPDB ID)。`--af`を付けるとAlphaFold DB(識別子はUniProt
+entry name(例: `TYK2_HUMAN`)またはaccession(例: `P29597`)のいずれでもよい。entry nameは
+内部で`idmap.resolve_uniprot_accession`によりaccessionに解決される)から取得する。
 
 ```bash
 pf fetch structure=9CSK --type=cif --output data/9csk.cif
+pf fetch structure=P61626 --af --type=cif --output data/P61626.cif
+pf fetch structure=TYK2_HUMAN --af --type=cif --output data/tyk2/TYK2_HUMAN_af.cif
 ```
 
-複数のPDB IDをカンマ区切りでまとめて取得することもできる(`structures=`、複数形)。
-この場合`--output`は出力ディレクトリになり、各ファイルは`<出力ディレクトリ>/<PDB_ID>.<拡張子>`として保存される。
-`--type`は必須(ディレクトリ名からはフォーマットを推定できないため)。
+複数の識別子をカンマ区切りでまとめて取得することもできる(`structures=`、複数形)。
+この場合`--output`は出力ディレクトリになり、各ファイルは`<出力ディレクトリ>/<識別子>.<拡張子>`として保存される。
+`--type`は必須(ディレクトリ名からはフォーマットを推定できないため)。`--af`の扱いは単体取得と同じ。
 
 ```bash
 pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
-```
-
-### 構造データの取得(AlphaFold DB)
-
-UniProt識別子を指定して、AlphaFold DBの予測構造を取得する(`structure-af=`)。
-オプション体系はRCSB PDBの`structure=`/`structures=`と同じ。
-
-識別子はUniProt entry name(例: `TYK2_HUMAN`)・accession(例: `P29597`)のいずれでもよい
-(entry nameは内部で`idmap.resolve_uniprot_accession`によりaccessionに解決される)。
-
-```bash
-pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
-pf fetch structure-af=TYK2_HUMAN --type=cif --output data/tyk2/TYK2_HUMAN_af.cif
-pf fetch structures-af=P61626,CDK4_HUMAN --type pdb --output data
+pf fetch structures=P61626,CDK4_HUMAN --af --type pdb --output data
 ```
 
 ## 関数一覧

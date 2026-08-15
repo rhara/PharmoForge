@@ -132,7 +132,7 @@ pytest tests/alignview tests/structfit
 TYK2のAlphaFold DB予測構造と複数のPDB結晶構造を重ね合わせて表示する:
 
 ```bash
-pf fetch structure-af=TYK2_HUMAN --type=cif --output data/tyk2/TYK2_HUMAN_af.cif
+pf fetch structure=TYK2_HUMAN --af --type=cif --output data/tyk2/TYK2_HUMAN_af.cif
 pf fetch structure=6NZP --output data/tyk2/6NZP.cif
 pf fetch structure=4OLI --output data/tyk2/4OLI.cif
 pf fetch structure=5C03 --output data/tyk2/5C03.cif

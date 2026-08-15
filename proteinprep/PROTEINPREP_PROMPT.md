@@ -59,7 +59,7 @@ pytest tests/proteinprep
 ヒトリゾチームC(UniProt: P61626)のAlphaFold DB予測構造を題材にした一連の流れ:
 
 ```bash
-pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
+pf fetch structure=P61626 --af --type=cif --output data/P61626.cif
 pf prep-protein data/P61626.cif --output data/P61626_dock.pdb --mode dock
 pf prep-protein data/P61626.cif --output data/P61626_md.pdb --mode md --ph 7.4
 ```

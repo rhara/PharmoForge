@@ -16,7 +16,7 @@ pf prep-protein data/P61626.cif --output data/P61626_md.pdb --mode md --ph 7.4
 ```
 
 入力構造は[`pf fetch structure=...`](../fetcher/README.md)(RCSB PDB)や
-[`pf fetch structure-af=...`](../fetcher/README.md)(AlphaFold DB)の出力をそのまま使える。
+[`pf fetch structure=... --af`](../fetcher/README.md)(AlphaFold DB)の出力をそのまま使える。
 
 ### 処理内容
 

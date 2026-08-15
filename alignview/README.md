@@ -35,7 +35,7 @@ pf align-view data/9csk.cif data/1abc.cif --method cealign
 - `--pymol-env`(既定`pymol`): PyMOLをインストールした専用conda/mamba環境名(下記参照)。
 
 入力構造は[`pf fetch structure=...`](../fetcher/README.md)(RCSB PDB)や
-[`pf fetch structure-af=...`](../fetcher/README.md)(AlphaFold DB)の出力、または
+[`pf fetch structure=... --af`](../fetcher/README.md)(AlphaFold DB)の出力、または
 [`pf prep-protein`](../proteinprep/README.md)の出力をそのまま使える。
 
 ## PyMOLの実行環境
