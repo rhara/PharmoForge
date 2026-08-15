@@ -44,6 +44,16 @@ pf fetch structure=9CSK --type=cif --output data/9csk.cif
 pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
 ```
 
+### 構造データの取得(AlphaFold DB)
+
+UniProt accessionを指定して、AlphaFold DBの予測構造を取得する(`structure-af=`)。
+オプション体系はRCSB PDBの`structure=`/`structures=`と同じ。
+
+```bash
+pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
+pf fetch structures-af=P61626,P11802 --type pdb --output data
+```
+
 ## 関数一覧
 
 fetcher固有(アトミックでない、標準化後の値の集約・TSV書き出し等)の実装。
@@ -66,9 +76,10 @@ fetcher固有ではなくアトミックな技術要素として、それぞれ[
 - 蛋白識別子の相互マッピング(UniProt entry name / accession / ChEMBL target id)は共通パッケージ [`src/idmap`](../src/idmap) で行う。
 - 化合物構造の標準化は共通パッケージ [`src/molstd`](../src/molstd) で行う(RDKit標準の`rdMolStandardize`のみを用いた自前実装、外部パッケージ`chembl_structure_pipeline`には非依存)。
 - RCSB PDB構造ファイルのダウンロードは共通パッケージ [`src/rcsb`](../src/rcsb) で行う。
+- AlphaFold DB構造ファイルのダウンロードは共通パッケージ [`src/afdb`](../src/afdb) で行う。
 
 ## テスト
 
 ```bash
-pytest tests/fetcher tests/idmap tests/chembl tests/molstd tests/rcsb
+pytest tests/fetcher tests/idmap tests/chembl tests/molstd tests/rcsb tests/afdb
 ```

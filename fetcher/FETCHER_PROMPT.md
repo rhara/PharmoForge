@@ -14,7 +14,8 @@ pf fetch <データ種別>=<識別子> --output <出力ファイル>
 ```
 
 - `<データ種別>` は現時点で `activities` (ChEMBL活性データ)、`structure` (RCSB PDB構造データ単体)、
-  `structures` (RCSB PDB構造データ複数)をサポート。
+  `structures` (RCSB PDB構造データ複数)、`structure-af` (AlphaFold DB構造データ単体)、
+  `structures-af` (AlphaFold DB構造データ複数)をサポート。
 - `--output` / `-o` は必須。出力ファイル名は都度明示的に指定する前提。
 - `--type` (`cif`/`pdb`) は構造データのフォーマット指定に使う。
 
@@ -61,6 +62,16 @@ pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
 - `--output` は出力ディレクトリになり、各ファイルは `<出力ディレクトリ>/<PDB_ID>.<fmt>` として保存される。
 - `--type` は必須(出力先がディレクトリのためファイル拡張子からフォーマットを推定できない)。
 
+### structure-af / structures-af: AlphaFold DB構造データ取得(単体/複数)
+
+```
+pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
+pf fetch structures-af=P61626,P11802 --type pdb --output data
+```
+
+- `<識別子>` はUniProt accessionを指定する。オプション体系(`--type`省略時の拡張子推定、複数形での出力ディレクトリ扱い等)はRCSB PDBの`structure`/`structures`と同じ。
+- AlphaFold DBのpredictionエンドポイント(`https://alphafold.ebi.ac.uk/api/prediction/{accession}`)からダウンロードURL(`cifUrl`/`pdbUrl`)を都度解決する(バージョン番号をURLに固定しない)。
+
 ## 実装ファイル
 
 - `src/fetcher/activities.py` — ChEMBL活性データの標準化+集約・TSV書き出し(fetcher固有の集計ロジック)
@@ -69,13 +80,14 @@ pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
 - `src/idmap/identifiers.py` — 蛋白識別子の相互マッピング(アトミックな技術要素として分離)
 - `src/molstd/standardize.py` — 化合物構造の標準化(アトミックな技術要素として分離。`rdMolStandardize`のみの自前実装)
 - `src/rcsb/download.py` — RCSB PDB構造データ取得(アトミックな技術要素として分離)
+- `src/afdb/download.py` — AlphaFold DB構造データ取得(アトミックな技術要素として分離)
 
 ## テスト
 
 ネットワークアクセスは `unittest.mock` でモックし、実際の外部APIへは接続しない。
 
 ```bash
-pytest tests/fetcher tests/idmap tests/chembl tests/molstd tests/rcsb
+pytest tests/fetcher tests/idmap tests/chembl tests/molstd tests/rcsb tests/afdb
 ```
 
 ## 動作例(サンプルデータ)

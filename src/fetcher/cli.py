@@ -2,13 +2,15 @@ from pathlib import Path
 
 import click
 
+from afdb import fetch_structure as fetch_af_structure
+from afdb import fetch_structures as fetch_af_structures
 from chembl import fetch_activities
 from idmap import resolve_chembl_target_id
 from rcsb import fetch_structure, fetch_structures
 
 from . import activities
 
-SUPPORTED_TYPES = ("activities", "structure", "structures")
+SUPPORTED_TYPES = ("activities", "structure", "structures", "structure-af", "structures-af")
 
 
 @click.command("fetch")
@@ -36,6 +38,8 @@ def fetch_cmd(spec: str, output: Path, fmt: str | None):
       pf fetch activities=CDK4_HUMAN --output data/cdk4_human_activities.tsv
       pf fetch structure=9CSK --type=cif --output data/9csk.cif
       pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
+      pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
+      pf fetch structures-af=P61626,P11802 --type pdb --output data
     """
     if "=" not in spec:
         raise click.UsageError(
@@ -59,6 +63,15 @@ def fetch_cmd(spec: str, output: Path, fmt: str | None):
         if not pdb_ids:
             raise click.UsageError(f"構造IDが指定されていません: {spec!r}")
         fetch_structures(pdb_ids, output, fmt.lower())
+    elif data_type == "structure-af":
+        fetch_af_structure(value, output, fmt=fmt)
+    elif data_type == "structures-af":
+        if fmt is None:
+            raise click.UsageError("structures-af=... では --type (cif/pdb) の指定が必須です。")
+        accessions = [x.strip() for x in value.split(",") if x.strip()]
+        if not accessions:
+            raise click.UsageError(f"構造IDが指定されていません: {spec!r}")
+        fetch_af_structures(accessions, output, fmt.lower())
     else:
         raise click.UsageError(
             f"未対応のデータ種別です: {data_type!r} (対応: {', '.join(SUPPORTED_TYPES)})"

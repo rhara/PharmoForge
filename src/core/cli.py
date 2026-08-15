@@ -1,6 +1,7 @@
 import click
 
 from fetcher.cli import fetch_cmd
+from proteinprep.cli import prep_protein_cmd
 from scaffoldanalyzer.cli import analyze_scaffolds_cmd
 
 
@@ -11,6 +12,7 @@ def cli():
 
 cli.add_command(fetch_cmd)
 cli.add_command(analyze_scaffolds_cmd)
+cli.add_command(prep_protein_cmd)
 
 
 if __name__ == "__main__":

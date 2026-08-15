@@ -34,14 +34,16 @@
 | `src/chembl` | ChEMBL REST APIからの活性データ取得。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/molstd` | 化合物構造の標準化(RDKit標準の`rdMolStandardize`のみを用いた自前実装、外部パッケージ`chembl_structure_pipeline`には非依存)。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/rcsb` | RCSB PDBからの構造ファイルダウンロード。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
+| `src/afdb` | AlphaFold DBからの構造ファイルダウンロード。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/molscaffold` | 化合物のBemis-Murckoスキャフォールド計算。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
 | `src/actbin` | 活性値の分位点ビニング(high/mid/low分類)。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
-| `src/fetcher` | ChEMBL活性データの標準化・集約・TSV書き出し、RCSB PDB構造データ取得のCLI([詳細](fetcher/README.md)) |
+| `src/fetcher` | ChEMBL活性データの標準化・集約・TSV書き出し、RCSB PDB/AlphaFold DB構造データ取得のCLI([詳細](fetcher/README.md)) |
 | `src/scaffoldanalyzer` | Bemis-Murckoスキャフォールド単位での活性高低の分布比較([詳細](scaffoldanalyzer/README.md)) |
+| `src/proteinprep` | PDBFixerによる蛋白構造の欠損原子補完・プロトン化([詳細](proteinprep/README.md)) |
 
 `pf`コマンド自体は`src/core/cli.py`のclickグループが起点となり、各機能パッケージがサブコマンドを登録する。
 
-アトミックなパッケージ(`core`/`idmap`/`chembl`/`molstd`/`rcsb`/`molscaffold`/`actbin`等)の関数一覧は[API.md](API.md)を参照。
+アトミックなパッケージ(`core`/`idmap`/`chembl`/`molstd`/`rcsb`/`afdb`/`molscaffold`/`actbin`等)の関数一覧は[API.md](API.md)を参照。
 
 ## 依存パッケージ
 
