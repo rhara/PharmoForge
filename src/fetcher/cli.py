@@ -5,7 +5,7 @@ import click
 from afdb import fetch_structure as fetch_af_structure
 from afdb import fetch_structures as fetch_af_structures
 from chembl import fetch_activities
-from idmap import resolve_chembl_target_id
+from idmap import resolve_chembl_target_id, resolve_uniprot_accession
 from rcsb import fetch_structure, fetch_structures
 
 from . import activities
@@ -39,7 +39,8 @@ def fetch_cmd(spec: str, output: Path, fmt: str | None):
       pf fetch structure=9CSK --type=cif --output data/9csk.cif
       pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
       pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
-      pf fetch structures-af=P61626,P11802 --type pdb --output data
+      pf fetch structure-af=TYK2_HUMAN --type=cif --output data/TYK2_HUMAN_af.cif
+      pf fetch structures-af=P61626,CDK4_HUMAN --type pdb --output data
     """
     if "=" not in spec:
         raise click.UsageError(
@@ -64,13 +65,14 @@ def fetch_cmd(spec: str, output: Path, fmt: str | None):
             raise click.UsageError(f"構造IDが指定されていません: {spec!r}")
         fetch_structures(pdb_ids, output, fmt.lower())
     elif data_type == "structure-af":
-        fetch_af_structure(value, output, fmt=fmt)
+        fetch_af_structure(resolve_uniprot_accession(value), output, fmt=fmt)
     elif data_type == "structures-af":
         if fmt is None:
             raise click.UsageError("structures-af=... では --type (cif/pdb) の指定が必須です。")
-        accessions = [x.strip() for x in value.split(",") if x.strip()]
-        if not accessions:
+        identifiers = [x.strip() for x in value.split(",") if x.strip()]
+        if not identifiers:
             raise click.UsageError(f"構造IDが指定されていません: {spec!r}")
+        accessions = [resolve_uniprot_accession(identifier) for identifier in identifiers]
         fetch_af_structures(accessions, output, fmt.lower())
     else:
         raise click.UsageError(

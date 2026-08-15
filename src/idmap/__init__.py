@@ -4,6 +4,7 @@ from .identifiers import (
     looks_like_chembl_id,
     looks_like_uniprot_accession,
     resolve_chembl_target_id,
+    resolve_uniprot_accession,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "looks_like_chembl_id",
     "looks_like_uniprot_accession",
     "resolve_chembl_target_id",
+    "resolve_uniprot_accession",
 ]

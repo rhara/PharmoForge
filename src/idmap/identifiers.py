@@ -1,8 +1,7 @@
 """UniProt entry name / accession と ChEMBL target id の相互マッピング。
 
-現時点では fetcher が必要とする「識別子 -> ChEMBL target id」の方向のみ実装している。
-他の機能(proteinprep, proteinanalyzer等)で逆方向やUniProt accession単体の解決が
-必要になった時点で、この下に追加していく。
+現時点では「識別子 -> ChEMBL target id」「識別子 -> UniProt accession」の方向のみ実装している。
+逆方向の解決が必要になった時点で、この下に追加していく。
 """
 
 import re
@@ -64,6 +63,14 @@ def accession_to_chembl_target_id(accession: str) -> str:
     return chembl_id
 
 
+def resolve_uniprot_accession(identifier: str) -> str:
+    """UniProt entry name(例: CDK4_HUMAN)/ accession(例: P11802)のいずれを与えても
+    UniProt accessionを返す。
+    """
+    identifier = identifier.strip()
+    return identifier if looks_like_uniprot_accession(identifier) else entry_name_to_accession(identifier)
+
+
 def resolve_chembl_target_id(identifier: str) -> str:
     """UniProt entry name / accession / ChEMBL target idのいずれを与えても
     ChEMBL target idを返す。
@@ -71,7 +78,4 @@ def resolve_chembl_target_id(identifier: str) -> str:
     identifier = identifier.strip()
     if looks_like_chembl_id(identifier):
         return identifier.upper()
-    accession = (
-        identifier if looks_like_uniprot_accession(identifier) else entry_name_to_accession(identifier)
-    )
-    return accession_to_chembl_target_id(accession)
+    return accession_to_chembl_target_id(resolve_uniprot_accession(identifier))

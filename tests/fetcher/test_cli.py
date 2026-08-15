@@ -93,6 +93,37 @@ def test_fetch_structures_af_dispatch(tmp_path):
     mock_fetch.assert_called_once_with(["P61626", "P11802"], output_dir, "pdb")
 
 
+def test_fetch_structure_af_dispatch_resolves_entry_name(tmp_path):
+    output = tmp_path / "tyk2.cif"
+    runner = CliRunner()
+    with (
+        patch("fetcher.cli.resolve_uniprot_accession", return_value="P29597") as mock_resolve,
+        patch("fetcher.cli.fetch_af_structure") as mock_fetch,
+    ):
+        result = runner.invoke(fetch_cmd, ["structure-af=TYK2_HUMAN", "--output", str(output)])
+
+    assert result.exit_code == 0, result.output
+    mock_resolve.assert_called_once_with("TYK2_HUMAN")
+    mock_fetch.assert_called_once_with("P29597", output, fmt=None)
+
+
+def test_fetch_structures_af_dispatch_resolves_mixed_identifiers(tmp_path):
+    output_dir = tmp_path / "data"
+    runner = CliRunner()
+    with (
+        patch("fetcher.cli.resolve_uniprot_accession", side_effect=["P61626", "P11802"]) as mock_resolve,
+        patch("fetcher.cli.fetch_af_structures") as mock_fetch,
+    ):
+        result = runner.invoke(
+            fetch_cmd,
+            ["structures-af=P61626,CDK4_HUMAN", "--type", "pdb", "--output", str(output_dir)],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert mock_resolve.call_args_list == [(("P61626",),), (("CDK4_HUMAN",),)]
+    mock_fetch.assert_called_once_with(["P61626", "P11802"], output_dir, "pdb")
+
+
 def test_fetch_structures_af_requires_type(tmp_path):
     output_dir = tmp_path / "data"
     runner = CliRunner()

@@ -69,7 +69,10 @@ pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
 pf fetch structures-af=P61626,P11802 --type pdb --output data
 ```
 
-- `<識別子>` はUniProt accessionを指定する。オプション体系(`--type`省略時の拡張子推定、複数形での出力ディレクトリ扱い等)はRCSB PDBの`structure`/`structures`と同じ。
+- `<識別子>` はUniProt entry name(例: `TYK2_HUMAN`)またはaccession(例: `P29597`)を指定する
+  (`src/idmap`の`resolve_uniprot_accession()`が自動判別してaccessionに解決する。`structures-af=`では
+  カンマ区切りの各識別子を個別に解決する)。オプション体系(`--type`省略時の拡張子推定、複数形での
+  出力ディレクトリ扱い等)はRCSB PDBの`structure`/`structures`と同じ。
 - AlphaFold DBのpredictionエンドポイント(`https://alphafold.ebi.ac.uk/api/prediction/{accession}`)からダウンロードURL(`cifUrl`/`pdbUrl`)を都度解決する(バージョン番号をURLに固定しない)。
 
 ## 実装ファイル
@@ -77,7 +80,7 @@ pf fetch structures-af=P61626,P11802 --type pdb --output data
 - `src/fetcher/activities.py` — ChEMBL活性データの標準化+集約・TSV書き出し(fetcher固有の集計ロジック)
 - `src/fetcher/cli.py` — `pf fetch` サブコマンド(データ種別のディスパッチ)
 - `src/chembl/activity.py` — ChEMBL活性データの生取得(アトミックな技術要素として分離)
-- `src/idmap/identifiers.py` — 蛋白識別子の相互マッピング(アトミックな技術要素として分離)
+- `src/idmap/identifiers.py` — 蛋白識別子の相互マッピング(アトミックな技術要素として分離。`resolve_chembl_target_id()`は`activities=`、`resolve_uniprot_accession()`は`structure-af=`/`structures-af=`が使用)
 - `src/molstd/standardize.py` — 化合物構造の標準化(アトミックな技術要素として分離。`rdMolStandardize`のみの自前実装)
 - `src/rcsb/download.py` — RCSB PDB構造データ取得(アトミックな技術要素として分離)
 - `src/afdb/download.py` — AlphaFold DB構造データ取得(アトミックな技術要素として分離)

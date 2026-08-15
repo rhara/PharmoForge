@@ -46,12 +46,16 @@ pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
 
 ### 構造データの取得(AlphaFold DB)
 
-UniProt accessionを指定して、AlphaFold DBの予測構造を取得する(`structure-af=`)。
+UniProt識別子を指定して、AlphaFold DBの予測構造を取得する(`structure-af=`)。
 オプション体系はRCSB PDBの`structure=`/`structures=`と同じ。
+
+識別子はUniProt entry name(例: `TYK2_HUMAN`)・accession(例: `P29597`)のいずれでもよい
+(entry nameは内部で`idmap.resolve_uniprot_accession`によりaccessionに解決される)。
 
 ```bash
 pf fetch structure-af=P61626 --type=cif --output data/P61626.cif
-pf fetch structures-af=P61626,P11802 --type pdb --output data
+pf fetch structure-af=TYK2_HUMAN --type=cif --output data/tyk2/TYK2_HUMAN_af.cif
+pf fetch structures-af=P61626,CDK4_HUMAN --type pdb --output data
 ```
 
 ## 関数一覧

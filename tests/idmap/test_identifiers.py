@@ -32,6 +32,16 @@ def test_accession_to_chembl_target_id(mock_get):
     assert identifiers.accession_to_chembl_target_id("P11802") == "CHEMBL331"
 
 
+def test_resolve_uniprot_accession_passthrough():
+    assert identifiers.resolve_uniprot_accession("P11802") == "P11802"
+
+
+@patch("idmap.identifiers.entry_name_to_accession", return_value="P11802")
+def test_resolve_uniprot_accession_from_entry_name(mock_entry):
+    assert identifiers.resolve_uniprot_accession("CDK4_HUMAN") == "P11802"
+    mock_entry.assert_called_once_with("CDK4_HUMAN")
+
+
 def test_resolve_chembl_target_id_passthrough():
     assert identifiers.resolve_chembl_target_id("chembl331") == "CHEMBL331"
 
