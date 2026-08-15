@@ -43,3 +43,38 @@ def test_render_scaffold_grid_skips_when_empty(tmp_path):
     report.render_scaffold_grid(empty, output, top_n=5)
 
     assert not output.exists()
+
+
+def _compound_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "smiles": ["Cc1ccccc1", "CCc1ccccc1", "Cc1ccncc1"],
+            "scaffold": ["c1ccccc1", "c1ccccc1", "c1ccncc1"],
+            "activity": [9.0, 8.0, 3.0],
+            "bin": ["high", "high", "low"],
+        }
+    )
+
+
+def test_render_compound_table_groups_by_scaffold_and_sorts_by_activity(tmp_path):
+    output = tmp_path / "compounds.html"
+    report.render_compound_table(
+        _compound_df(), _summary_df(), "activity", output, top_n=5, ascending=False
+    )
+
+    html = output.read_text()
+    assert output.exists()
+    # 高enrichmentのc1ccccc1グループが先、グループ内は活性降順(Cc1ccccc1 9.0 が先)
+    assert html.index("Cc1ccccc1") < html.index("CCc1ccccc1")
+    assert html.index("c1ccccc1") < html.index("Cc1ccncc1")
+
+
+def test_render_compound_table_limits_to_top_n_scaffolds(tmp_path):
+    output = tmp_path / "compounds.html"
+    report.render_compound_table(
+        _compound_df(), _summary_df(), "activity", output, top_n=1, ascending=False
+    )
+
+    html = output.read_text()
+    # top_n=1なのでenrichment最大のc1ccccc1グループのみ含まれる
+    assert "Cc1ccncc1" not in html

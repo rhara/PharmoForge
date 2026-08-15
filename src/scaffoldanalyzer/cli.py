@@ -68,3 +68,21 @@ def analyze_scaffolds_cmd(
     report.render_scaffold_grid(
         summary, output_dir / "scaffold_grid_low.png", top_n=top_n, ascending=True
     )
+    report.render_compound_table(
+        df,
+        summary,
+        activity_col,
+        output_dir / "scaffold_compounds_high.html",
+        top_n=top_n,
+        ascending=False,
+        smiles_col=smiles_col,
+    )
+    report.render_compound_table(
+        df,
+        summary,
+        activity_col,
+        output_dir / "scaffold_compounds_low.html",
+        top_n=top_n,
+        ascending=True,
+        smiles_col=smiles_col,
+    )

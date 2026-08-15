@@ -43,6 +43,10 @@ pf analyze-scaffolds data/cdk4_human_activities.tsv --output-dir data/cdk4_scaff
 4. `enrichment`降順で全件をTSVに出力(`scaffoldanalyzer.report.write_summary_tsv()`)、
    上位・下位`--top-n`件を構造式グリッド画像として出力する(`scaffoldanalyzer.report.render_scaffold_grid()`、
    `RDKit.Draw.MolsToGridImage`)。
+5. 同じ上位・下位`--top-n`件のスキャフォールドについて、それに属する個々の化合物(置換基込み)を
+   構造式付きHTMLテーブルとして出力する(`scaffoldanalyzer.report.render_compound_table()`)。
+   スキャフォールドごとに見出し行(構造式・n_total等)を挟み、グループ内は活性値降順で化合物を並べる。
+   構造式は`RDKit.Draw.MolToImage`でPNG化しbase64埋め込み(外部ファイル依存なしの単一HTML)。
 
 ## 出力
 
@@ -53,6 +57,8 @@ pf analyze-scaffolds data/cdk4_human_activities.tsv --output-dir data/cdk4_scaff
 | `scaffold_summary.tsv` | 全スキャフォールドの集計結果(`scaffold, n_total, n_high, n_mid, n_low, frac_high, frac_low, enrichment, mean_activity, median_activity`)、`enrichment`降順 |
 | `scaffold_grid_high.png` | `enrichment`上位のスキャフォールドの構造式グリッド(n/high/low件数、enrichment、median活性を凡例表示) |
 | `scaffold_grid_low.png` | `enrichment`下位のスキャフォールドの構造式グリッド |
+| `scaffold_compounds_high.html` | `enrichment`上位スキャフォールドに属する個々の化合物一覧(構造式・SMILES・活性値・bin) |
+| `scaffold_compounds_low.html` | `enrichment`下位スキャフォールドに属する個々の化合物一覧 |
 
 ## 実装ファイル
 

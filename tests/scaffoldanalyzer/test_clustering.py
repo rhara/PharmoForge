@@ -30,3 +30,28 @@ def test_summarize_scaffolds_enrichment():
     assert benzene_row["enrichment"] > 0
     # enrichment降順でソートされている
     assert summary["enrichment"].is_monotonic_decreasing
+
+
+def test_summarize_scaffolds_columns_and_rounding():
+    df = add_scaffolds(_sample_df(), smiles_col="smiles")
+    df = assign_activity_bins(df, "activity", high_quantile=0.6, low_quantile=0.4)
+    summary = summarize_scaffolds(df, activity_col="activity", min_count=1)
+
+    assert list(summary.columns) == [
+        "scaffold",
+        "n_total",
+        "n_high",
+        "n_mid",
+        "n_low",
+        "frac_high",
+        "frac_low",
+        "enrichment",
+        "median_activity",
+        "mean_activity",
+        "sd_activity",
+    ]
+
+    benzene_row = summary[summary["scaffold"] == "c1ccccc1"].iloc[0]
+    assert benzene_row["median_activity"] == 8.5
+    assert benzene_row["mean_activity"] == 8.5
+    assert round(benzene_row["sd_activity"], 2) == benzene_row["sd_activity"]

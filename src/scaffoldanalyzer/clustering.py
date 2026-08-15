@@ -37,7 +37,7 @@ def summarize_scaffolds(
             counts[col] = 0
     counts["n_total"] = counts[["high", "mid", "low"]].sum(axis=1)
 
-    activity_stats = df.groupby("scaffold")[activity_col].agg(["mean", "median"])
+    activity_stats = df.groupby("scaffold")[activity_col].agg(["mean", "median", "std"])
     summary = counts.join(activity_stats)
     summary = summary[summary["n_total"] >= min_count]
 
@@ -54,8 +54,16 @@ def summarize_scaffolds(
             "low": "n_low",
             "mean": "mean_activity",
             "median": "median_activity",
+            "std": "sd_activity",
         }
     )
+    summary[["frac_high", "frac_low", "enrichment"]] = summary[
+        ["frac_high", "frac_low", "enrichment"]
+    ].round(3)
+    summary[["median_activity", "mean_activity", "sd_activity"]] = summary[
+        ["median_activity", "mean_activity", "sd_activity"]
+    ].round(2)
+
     summary = summary.reset_index().sort_values("enrichment", ascending=False).reset_index(drop=True)
     return summary[
         [
@@ -67,7 +75,8 @@ def summarize_scaffolds(
             "frac_high",
             "frac_low",
             "enrichment",
-            "mean_activity",
             "median_activity",
+            "mean_activity",
+            "sd_activity",
         ]
     ]

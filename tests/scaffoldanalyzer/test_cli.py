@@ -33,3 +33,5 @@ def test_analyze_scaffolds_cmd_end_to_end(tmp_path):
     assert (output_dir / "scaffold_summary.tsv").exists()
     assert (output_dir / "scaffold_grid_high.png").exists()
     assert (output_dir / "scaffold_grid_low.png").exists()
+    assert (output_dir / "scaffold_compounds_high.html").exists()
+    assert (output_dir / "scaffold_compounds_low.html").exists()
