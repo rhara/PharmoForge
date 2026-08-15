@@ -11,7 +11,7 @@ pf fetch <データ種別>=<識別子> --output <出力ファイル>
 ### 活性データの取得(ChEMBL)
 
 指定した標的蛋白について、pChEMBL値を持つ活性データを全件取得する。
-化合物構造は[ChEMBL Structure Pipeline](https://github.com/chembl/ChEMBL_Structure_Pipeline)に倣って標準化し(塩の除去等)、
+化合物構造は共通パッケージ[`src/molstd`](../src/molstd)で標準化し(塩の除去等)、
 標準化後の構造が同一の化合物についてはpChEMBL値をmean/median/sdに集約してTSVに書き出す。
 
 ```bash
@@ -44,14 +44,31 @@ pf fetch structure=9CSK --type=cif --output data/9csk.cif
 pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
 ```
 
+## 関数一覧
+
+fetcher固有(アトミックでない、標準化後の値の集約・TSV書き出し等)の実装。
+アトミックな共通パッケージ側の関数(ChEMBL活性データ生取得、RCSB構造ダウンロード等)は[API.md](../API.md)を参照。
+
+### `src/fetcher/activities.py`
+
+| 関数 | 説明 |
+| --- | --- |
+| `standardize_and_aggregate(records: list[dict]) -> list[dict]` | 取得した活性レコードの化合物構造を`molstd.standardize_smiles`で標準化し、同一構造ごとにpChEMBL値をmean/median/sdに集約する(`_median`降順)。 |
+| `write_activities_tsv(records: list[dict], output: Path) -> None` | 集約済みレコードをTSV(`smiles, _median, _mean, _sd, _n`)として書き出す。 |
+
+ChEMBL活性データの生取得(`fetch_activities`)、構造データ取得(`fetch_structure`/`fetch_structures`)は
+fetcher固有ではなくアトミックな技術要素として、それぞれ[`src/chembl`](../src/chembl)、
+[`src/rcsb`](../src/rcsb)に切り出し済み([API.md](../API.md)参照)。
+
 ## 実装方針
 
-- ChEMBLへのアクセスは `chembl_webresource_client` を使わず、`requests` による自前のAPI呼び出しで行う([`src/fetcher/chembl.py`](../src/fetcher/chembl.py))。
+- ChEMBLへのアクセスは `chembl_webresource_client` を使わず、`requests` による自前のAPI呼び出しで行う(共通パッケージ [`src/chembl`](../src/chembl))。
 - 蛋白識別子の相互マッピング(UniProt entry name / accession / ChEMBL target id)は共通パッケージ [`src/idmap`](../src/idmap) で行う。
-- 化合物構造の標準化は共通パッケージ [`src/molstd`](../src/molstd) で行う(fetcher専用ではなく横断的な技術要素として分離。`chembl_structure_pipeline` + RDKitを使用)。
+- 化合物構造の標準化は共通パッケージ [`src/molstd`](../src/molstd) で行う(RDKit標準の`rdMolStandardize`のみを用いた自前実装、外部パッケージ`chembl_structure_pipeline`には非依存)。
+- RCSB PDB構造ファイルのダウンロードは共通パッケージ [`src/rcsb`](../src/rcsb) で行う。
 
 ## テスト
 
 ```bash
-pytest tests/fetcher tests/idmap tests/molstd
+pytest tests/fetcher tests/idmap tests/chembl tests/molstd tests/rcsb
 ```

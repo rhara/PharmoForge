@@ -1,6 +1,7 @@
 import click
 
 from fetcher.cli import fetch_cmd
+from scaffoldanalyzer.cli import analyze_scaffolds_cmd
 
 
 @click.group()
@@ -9,6 +10,7 @@ def cli():
 
 
 cli.add_command(fetch_cmd)
+cli.add_command(analyze_scaffolds_cmd)
 
 
 if __name__ == "__main__":

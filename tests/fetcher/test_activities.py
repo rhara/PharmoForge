@@ -1,33 +1,9 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from fetcher import chembl
-
-
-@patch("fetcher.chembl.requests.get")
-def test_fetch_activities_paginates(mock_get):
-    page1 = MagicMock(
-        json=lambda: {
-            "activities": [{"molecule_chembl_id": "CHEMBL1", "pchembl_value": "6.5"}],
-            "page_meta": {"next": "/chembl/api/data/activity.json?offset=1000"},
-        },
-        raise_for_status=lambda: None,
-    )
-    page2 = MagicMock(
-        json=lambda: {
-            "activities": [{"molecule_chembl_id": "CHEMBL2", "pchembl_value": "7.1"}],
-            "page_meta": {"next": None},
-        },
-        raise_for_status=lambda: None,
-    )
-    mock_get.side_effect = [page1, page2]
-
-    records = chembl.fetch_activities("CHEMBL331")
-
-    assert [r["molecule_chembl_id"] for r in records] == ["CHEMBL1", "CHEMBL2"]
-    assert mock_get.call_count == 2
+from fetcher import activities
 
 
-@patch("fetcher.chembl.standardize_smiles")
+@patch("fetcher.activities.standardize_smiles")
 def test_standardize_and_aggregate_groups_by_standardized_structure(mock_standardize):
     # 2 records standardize to the same structure ("CCO"), 1 to a different one ("CCN")
     mock_standardize.side_effect = lambda smiles: {"CCO.raw": "CCO", "CCO.raw2": "CCO", "CCN.raw": "CCN"}[smiles]
@@ -37,7 +13,7 @@ def test_standardize_and_aggregate_groups_by_standardized_structure(mock_standar
         {"canonical_smiles": "CCN.raw", "pchembl_value": "5.0"},
     ]
 
-    aggregated = chembl.standardize_and_aggregate(records)
+    aggregated = activities.standardize_and_aggregate(records)
     by_smiles = {row["smiles"]: row for row in aggregated}
 
     assert set(by_smiles) == {"CCO", "CCN"}
@@ -49,7 +25,7 @@ def test_standardize_and_aggregate_groups_by_standardized_structure(mock_standar
     assert by_smiles["CCN"]["_sd"] == ""
 
 
-@patch("fetcher.chembl.standardize_smiles")
+@patch("fetcher.activities.standardize_smiles")
 def test_standardize_and_aggregate_sorted_by_median_descending(mock_standardize):
     mock_standardize.side_effect = lambda smiles: smiles
     records = [
@@ -58,15 +34,15 @@ def test_standardize_and_aggregate_sorted_by_median_descending(mock_standardize)
         {"canonical_smiles": "MID", "pchembl_value": "7.0"},
     ]
 
-    aggregated = chembl.standardize_and_aggregate(records)
+    aggregated = activities.standardize_and_aggregate(records)
 
     assert [row["smiles"] for row in aggregated] == ["HIGH", "MID", "LOW"]
 
 
-@patch("fetcher.chembl.standardize_smiles", return_value=None)
+@patch("fetcher.activities.standardize_smiles", return_value=None)
 def test_standardize_and_aggregate_skips_unparsable(mock_standardize):
     records = [{"canonical_smiles": "garbage", "pchembl_value": "6.0"}]
-    assert chembl.standardize_and_aggregate(records) == []
+    assert activities.standardize_and_aggregate(records) == []
 
 
 def test_standardize_and_aggregate_skips_missing_fields():
@@ -74,7 +50,7 @@ def test_standardize_and_aggregate_skips_missing_fields():
         {"canonical_smiles": None, "pchembl_value": "6.0"},
         {"canonical_smiles": "CCO", "pchembl_value": None},
     ]
-    assert chembl.standardize_and_aggregate(records) == []
+    assert activities.standardize_and_aggregate(records) == []
 
 
 def test_write_activities_tsv(tmp_path):
@@ -89,9 +65,9 @@ def test_write_activities_tsv(tmp_path):
     ]
     output = tmp_path / "out.tsv"
 
-    chembl.write_activities_tsv(records, output)
+    activities.write_activities_tsv(records, output)
 
     lines = output.read_text().splitlines()
-    assert lines[0] == "\t".join(chembl.AGGREGATED_FIELDS)
+    assert lines[0] == "\t".join(activities.AGGREGATED_FIELDS)
     assert "CCO" in lines[1]
     assert "7.0" in lines[1]

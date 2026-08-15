@@ -2,9 +2,11 @@ from pathlib import Path
 
 import click
 
+from chembl import fetch_activities
 from idmap import resolve_chembl_target_id
+from rcsb import fetch_structure, fetch_structures
 
-from . import chembl, structures
+from . import activities
 
 SUPPORTED_TYPES = ("activities", "structure", "structures")
 
@@ -45,18 +47,18 @@ def fetch_cmd(spec: str, output: Path, fmt: str | None):
 
     if data_type == "activities":
         target_chembl_id = resolve_chembl_target_id(value)
-        records = chembl.fetch_activities(target_chembl_id)
-        aggregated = chembl.standardize_and_aggregate(records)
-        chembl.write_activities_tsv(aggregated, output)
+        records = fetch_activities(target_chembl_id)
+        aggregated = activities.standardize_and_aggregate(records)
+        activities.write_activities_tsv(aggregated, output)
     elif data_type == "structure":
-        structures.fetch_structure(value, output, fmt=fmt)
+        fetch_structure(value, output, fmt=fmt)
     elif data_type == "structures":
         if fmt is None:
             raise click.UsageError("structures=... では --type (cif/pdb) の指定が必須です。")
         pdb_ids = [x.strip() for x in value.split(",") if x.strip()]
         if not pdb_ids:
             raise click.UsageError(f"構造IDが指定されていません: {spec!r}")
-        structures.fetch_structures(pdb_ids, output, fmt.lower())
+        fetch_structures(pdb_ids, output, fmt.lower())
     else:
         raise click.UsageError(
             f"未対応のデータ種別です: {data_type!r} (対応: {', '.join(SUPPORTED_TYPES)})"

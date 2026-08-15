@@ -10,12 +10,12 @@ def test_fetch_activities_dispatch(tmp_path):
     runner = CliRunner()
     with (
         patch("fetcher.cli.resolve_chembl_target_id", return_value="CHEMBL331") as mock_resolve,
-        patch("fetcher.cli.chembl.fetch_activities", return_value=[{"molecule_chembl_id": "CHEMBL1"}]) as mock_fetch,
+        patch("fetcher.cli.fetch_activities", return_value=[{"molecule_chembl_id": "CHEMBL1"}]) as mock_fetch,
         patch(
-            "fetcher.cli.chembl.standardize_and_aggregate",
+            "fetcher.cli.activities.standardize_and_aggregate",
             return_value=[{"smiles": "CCO"}],
         ) as mock_aggregate,
-        patch("fetcher.cli.chembl.write_activities_tsv") as mock_write,
+        patch("fetcher.cli.activities.write_activities_tsv") as mock_write,
     ):
         result = runner.invoke(fetch_cmd, ["activities=CDK4_HUMAN", "--output", str(output)])
 
@@ -29,7 +29,7 @@ def test_fetch_activities_dispatch(tmp_path):
 def test_fetch_structure_dispatch_infers_format(tmp_path):
     output = tmp_path / "9csk.cif"
     runner = CliRunner()
-    with patch("fetcher.cli.structures.fetch_structure") as mock_fetch_structure:
+    with patch("fetcher.cli.fetch_structure") as mock_fetch_structure:
         result = runner.invoke(fetch_cmd, ["structure=9CSK", "--output", str(output)])
 
     assert result.exit_code == 0, result.output
@@ -39,7 +39,7 @@ def test_fetch_structure_dispatch_infers_format(tmp_path):
 def test_fetch_structure_dispatch_explicit_type(tmp_path):
     output = tmp_path / "9csk.cif"
     runner = CliRunner()
-    with patch("fetcher.cli.structures.fetch_structure") as mock_fetch_structure:
+    with patch("fetcher.cli.fetch_structure") as mock_fetch_structure:
         result = runner.invoke(
             fetch_cmd, ["structure=9CSK", "--type=pdb", "--output", str(output)]
         )
@@ -51,7 +51,7 @@ def test_fetch_structure_dispatch_explicit_type(tmp_path):
 def test_fetch_structures_dispatch(tmp_path):
     output_dir = tmp_path / "data"
     runner = CliRunner()
-    with patch("fetcher.cli.structures.fetch_structures") as mock_fetch_structures:
+    with patch("fetcher.cli.fetch_structures") as mock_fetch_structures:
         result = runner.invoke(
             fetch_cmd,
             ["structures=6P8F,7SJ3,9CSK", "--type", "pdb", "--output", str(output_dir)],
