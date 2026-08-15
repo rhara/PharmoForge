@@ -13,8 +13,10 @@ PharmoForgeにおける「データ収集」機能を担う。
 pf fetch <データ種別>=<識別子> --output <出力ファイル>
 ```
 
-- `<データ種別>` は現時点で `activities` (ChEMBL活性データ) と `structure` (RCSB PDB構造データ) をサポート。
+- `<データ種別>` は現時点で `activities` (ChEMBL活性データ)、`structure` (RCSB PDB構造データ単体)、
+  `structures` (RCSB PDB構造データ複数)をサポート。
 - `--output` / `-o` は必須。出力ファイル名は都度明示的に指定する前提。
+- `--type` (`cif`/`pdb`) は構造データのフォーマット指定に使う。
 
 ### activities: ChEMBL活性データ取得
 
@@ -30,14 +32,24 @@ pf fetch activities=CDK4_HUMAN --output data/cdk4_human_activities.tsv
 - 出力はTSV。列は `src/fetcher/chembl.py` の `ACTIVITY_FIELDS` を参照
   (`molecule_chembl_id`, `canonical_smiles`, `standard_type`, `standard_value`, `pchembl_value` 等)。
 
-### structure: RCSB PDB構造データ取得
+### structure: RCSB PDB構造データ取得(単体)
 
 ```
-pf fetch structure=9CSK --output data/9csk.cif
+pf fetch structure=9CSK --type=cif --output data/9csk.cif
 ```
 
 - RCSB PDBのダウンロードエンドポイント `https://files.rcsb.org/download/{PDB_ID}.{fmt}` から取得する。
-- フォーマット(`cif`/`pdb`)は出力ファイルの拡張子から決める。
+- フォーマット(`cif`/`pdb`)は `--type` で指定する。省略時は出力ファイルの拡張子から推定する(どちらもなければcif)。
+
+### structures: RCSB PDB構造データ取得(複数)
+
+```
+pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
+```
+
+- `<識別子>` はPDB IDをカンマ区切りで複数指定する。
+- `--output` は出力ディレクトリになり、各ファイルは `<出力ディレクトリ>/<PDB_ID>.<fmt>` として保存される。
+- `--type` は必須(出力先がディレクトリのためファイル拡張子からフォーマットを推定できない)。
 
 ## 実装ファイル
 

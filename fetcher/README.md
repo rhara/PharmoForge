@@ -28,11 +28,19 @@ pf fetch activities=CDK4_HUMAN --output data/cdk4_human_activities.tsv
 
 ### 構造データの取得(RCSB PDB)
 
+単体取得。`--type`(`cif`/`pdb`)でフォーマットを明示できる。省略時は出力ファイルの拡張子(`.cif` / `.pdb`)から推定する。
+
 ```bash
-pf fetch structure=9CSK --output data/9csk.cif
+pf fetch structure=9CSK --type=cif --output data/9csk.cif
 ```
 
-フォーマットは出力ファイルの拡張子(`.cif` / `.pdb`)で決まる。
+複数のPDB IDをカンマ区切りでまとめて取得することもできる(`structures=`、複数形)。
+この場合`--output`は出力ディレクトリになり、各ファイルは`<出力ディレクトリ>/<PDB_ID>.<拡張子>`として保存される。
+`--type`は必須(ディレクトリ名からはフォーマットを推定できないため)。
+
+```bash
+pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
+```
 
 ## 実装方針
 

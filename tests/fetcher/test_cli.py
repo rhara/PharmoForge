@@ -21,14 +21,48 @@ def test_fetch_activities_dispatch(tmp_path):
     mock_write.assert_called_once()
 
 
-def test_fetch_structure_dispatch(tmp_path):
+def test_fetch_structure_dispatch_infers_format(tmp_path):
     output = tmp_path / "9csk.cif"
     runner = CliRunner()
     with patch("fetcher.cli.structures.fetch_structure") as mock_fetch_structure:
         result = runner.invoke(fetch_cmd, ["structure=9CSK", "--output", str(output)])
 
     assert result.exit_code == 0, result.output
-    mock_fetch_structure.assert_called_once_with("9CSK", output)
+    mock_fetch_structure.assert_called_once_with("9CSK", output, fmt=None)
+
+
+def test_fetch_structure_dispatch_explicit_type(tmp_path):
+    output = tmp_path / "9csk.cif"
+    runner = CliRunner()
+    with patch("fetcher.cli.structures.fetch_structure") as mock_fetch_structure:
+        result = runner.invoke(
+            fetch_cmd, ["structure=9CSK", "--type=pdb", "--output", str(output)]
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_fetch_structure.assert_called_once_with("9CSK", output, fmt="pdb")
+
+
+def test_fetch_structures_dispatch(tmp_path):
+    output_dir = tmp_path / "data"
+    runner = CliRunner()
+    with patch("fetcher.cli.structures.fetch_structures") as mock_fetch_structures:
+        result = runner.invoke(
+            fetch_cmd,
+            ["structures=6P8F,7SJ3,9CSK", "--type", "pdb", "--output", str(output_dir)],
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_fetch_structures.assert_called_once_with(["6P8F", "7SJ3", "9CSK"], output_dir, "pdb")
+
+
+def test_fetch_structures_requires_type(tmp_path):
+    output_dir = tmp_path / "data"
+    runner = CliRunner()
+    result = runner.invoke(fetch_cmd, ["structures=6P8F,7SJ3", "--output", str(output_dir)])
+
+    assert result.exit_code != 0
+    assert "--type" in result.output
 
 
 def test_invalid_spec_missing_equals():
