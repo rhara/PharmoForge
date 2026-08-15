@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pharmoforge"
+version = "0.1.0"
+description = "PharmoForge: 創薬支援ツール群"
+requires-python = ">=3.14"
+dependencies = [
+    "requests",
+    "click",
+    "rdkit>=2026.03.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+pf = "core.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
