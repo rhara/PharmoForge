@@ -15,6 +15,7 @@ dependencies = [
     "pillow",
     "openmm",
     "pdbfixer",
+    "prody",  # conda-forgeでのビルド提供が不安定なためpipでインストールする
 ]
 
 [project.optional-dependencies]
@@ -27,3 +28,6 @@ pf = "core.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"

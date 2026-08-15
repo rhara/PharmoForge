@@ -32,8 +32,9 @@
 | `entry_name_to_accession(entry_name: str) -> str` | UniProt entry name(例: `CDK4_HUMAN`)をaccession(例: `P11802`)に変換する(UniProt REST APIを使用)。 |
 | `accession_to_chembl_target_id(accession: str) -> str` | UniProt accessionをChEMBL target id(例: `CHEMBL331`)に変換する(ChEMBL REST APIを使用)。 |
 | `resolve_chembl_target_id(identifier: str) -> str` | UniProt entry name / accession / ChEMBL target idのいずれを与えてもChEMBL target idを返す(上記3関数を組み合わせた入口)。 |
+| `resolve_uniprot_accession(identifier: str) -> str` | UniProt entry name / accessionのいずれを与えてもUniProt accessionを返す(`fetcher`の`structure-af=`/`structures-af=`が使用)。 |
 
-現時点では「識別子 → ChEMBL target id」の方向のみ実装。逆方向やUniProt accession単体の解決が他機能で必要になった時点で追加する。
+現時点では「識別子 → ChEMBL target id」「識別子 → UniProt accession」の方向のみ実装。逆方向の解決が他機能で必要になった時点で追加する。
 
 ## `src/chembl`
 
@@ -110,3 +111,29 @@ UniProtエントリの取得と、創薬(構造生物学・メディシナルケ
 | 関数 | 説明 |
 | --- | --- |
 | `assign_activity_bins(df: pd.DataFrame, activity_col: str, high_quantile: float = 0.75, low_quantile: float = 0.25) -> pd.DataFrame` | `activity_col`の分位点で各行を`high`/`mid`/`low`に分類した`bin`列を追加する。`low_quantile < high_quantile`(0〜1)でない場合は`ValueError`。 |
+
+## `src/structio`
+
+PDB/CIF構造ファイルの読み書き(拡張子で自動判別、[ProDy](http://prody.csb.pitt.edu/)の
+`AtomGroup`を介する)。`structfit`・`proteinextract`が共通で利用する。
+
+### `structio.io`
+
+| 関数 | 説明 |
+| --- | --- |
+| `parse_structure(path: Path) -> Atomic` | PDB/CIF形式の構造ファイルを拡張子(`.pdb`/`.cif`/`.mmcif`)で自動判別して読み込む。 |
+| `write_structure(atoms: Atomic, path: Path) -> None` | ProDyの`AtomGroup`(または`select()`の結果)を、拡張子で自動判別したPDB/CIF形式で書き出す。出力先ディレクトリが存在しない場合は作成する。 |
+
+## `src/structfit`
+
+同一蛋白の複数構造間で、残基番号の対応のみに基づく剛体重ね合わせ(rigid-body fit)を計算する
+([ProDy](http://prody.csb.pitt.edu/)を使用、conda-forgeでのビルド提供が不安定なためpipでインストール)。
+配列アラインメントを一切行わないため、構造間でPDBの残基番号(UniProt基準等)が揃っていることが前提。
+構造の読み込みは[`structio`](#srcstructio)を利用する。
+
+### `structfit.fit`
+
+| 関数 | 説明 |
+| --- | --- |
+| `fit_by_residue_number(mobile_path: Path, target_path: Path) -> FitResult` | `mobile_path`・`target_path`の構造(PDB/CIF)を読み込み、残基番号が一致するCA原子同士を対応付けて`mobile`を`target`に重ね合わせる剛体変換を求める。両構造とも複数鎖を含む場合、共通残基番号数が最大になる鎖の組を自動選択する(NCS等による複数コピー対策)。共通の残基番号(CA)が1つもない場合は`ValueError`。 |
+| `FitResult` | `fit_by_residue_number`の戻り値(dataclass)。`matrix`(4x4 numpy配列、行優先。`v' = matrix @ [x, y, z, 1]`)、`rmsd: float`、`n_residues: int`、`mobile_chain: str`、`target_chain: str`。 |
