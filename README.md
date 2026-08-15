@@ -35,15 +35,31 @@
 | `src/molstd` | 化合物構造の標準化(RDKit標準の`rdMolStandardize`のみを用いた自前実装、外部パッケージ`chembl_structure_pipeline`には非依存)。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/rcsb` | RCSB PDBからの構造ファイルダウンロード。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/afdb` | AlphaFold DBからの構造ファイルダウンロード。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
+| `src/uniprot` | UniProtエントリの取得・創薬向け情報抽出。当初`proteinanalyzer`固有だったがアトミックな技術要素として独立させた |
 | `src/molscaffold` | 化合物のBemis-Murckoスキャフォールド計算。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
 | `src/actbin` | 活性値の分位点ビニング(high/mid/low分類)。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
 | `src/fetcher` | ChEMBL活性データの標準化・集約・TSV書き出し、RCSB PDB/AlphaFold DB構造データ取得のCLI([詳細](fetcher/README.md)) |
 | `src/scaffoldanalyzer` | Bemis-Murckoスキャフォールド単位での活性高低の分布比較([詳細](scaffoldanalyzer/README.md)) |
 | `src/proteinprep` | PDBFixerによる蛋白構造の欠損原子補完・プロトン化([詳細](proteinprep/README.md)) |
+| `src/proteinanalyzer` | UniProtからの創薬向け蛋白情報取得CLI([詳細](proteinanalyzer/README.md)) |
 
 `pf`コマンド自体は`src/core/cli.py`のclickグループが起点となり、各機能パッケージがサブコマンドを登録する。
+サブコマンド一覧は[`pf`コマンド一覧](#pfコマンド一覧)を参照。
 
-アトミックなパッケージ(`core`/`idmap`/`chembl`/`molstd`/`rcsb`/`afdb`/`molscaffold`/`actbin`等)の関数一覧は[API.md](API.md)を参照。
+アトミックなパッケージ(`core`/`idmap`/`chembl`/`molstd`/`rcsb`/`afdb`/`uniprot`/`molscaffold`/`actbin`等)の関数一覧は[API.md](API.md)を参照。
+
+## `pf`コマンド一覧
+
+各コマンドの詳細な引数・出力仕様は、それぞれのリンク先の機能READMEを参照。
+
+| コマンド | 機能 | 例 |
+| --- | --- | --- |
+| [`pf fetch`](fetcher/README.md) | ChEMBL活性データ、RCSB PDB/AlphaFold DB構造データの取得 | `pf fetch activities=CDK4_HUMAN --output data/cdk4_human_activities.tsv` |
+| [`pf analyze-scaffolds`](scaffoldanalyzer/README.md) | Bemis-Murckoスキャフォールド単位での活性高低分布の比較 | `pf analyze-scaffolds data/cdk4_human_activities.tsv --output-dir data/cdk4_scaffold_analysis` |
+| [`pf prep-protein`](proteinprep/README.md) | PDBFixerによる蛋白構造の欠損原子補完・プロトン化 | `pf prep-protein data/9csk.cif --output data/9csk_dock.pdb --mode dock` |
+| [`pf protein-info`](proteinanalyzer/README.md) | UniProtからの創薬向け蛋白情報取得(JSON出力) | `pf protein-info EGFR_HUMAN --output data/egfr_info.json` |
+
+全コマンド共通で `pf <コマンド> --help` により引数の詳細を確認できる。
 
 ## 依存パッケージ
 
