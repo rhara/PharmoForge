@@ -32,7 +32,7 @@ GPUが使えるマシンと使えないマシンが混在する。GPUを活用�
 ### インストール / CLI
 - PharmoForge自体は `pip install -e .` でエディタブルインストールして使う前提(サードパーティ依存パッケージのconda-forge優先方針とは別)。
 - スクリプトは単一コマンド `pf` に集約する。機能は第一パラメータで指定する。
-  例: `pf fetch activities=JAK1_HUMAN --output data/JAK1_HUMAN.tsv`
+  例: `pf fetch activity=JAK1_HUMAN --outdir data`
 - サブコマンドの詳細(引数体系等)は各機能を実装する際に個別に検討する。
 
 ### 蛋白識別子のマッピング

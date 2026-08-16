@@ -5,8 +5,10 @@ ChEMBLやRCSB PDBなど外部データベースから、化合物・活性デー
 ## 使い方
 
 ```bash
-pf fetch <データ種別>=<識別子> --output <出力ファイル>
+pf fetch <データ種別>=<識別子> --outdir <出力ディレクトリ>
 ```
+
+出力先は常に`--outdir`/`-o`で指定するディレクトリで、ファイル名は識別子から自動的に決まる。
 
 ### 活性データの取得(ChEMBL)
 
@@ -15,8 +17,10 @@ pf fetch <データ種別>=<識別子> --output <出力ファイル>
 標準化後の構造が同一の化合物についてはpChEMBL値をmean/median/sdに集約してTSVに書き出す。
 
 ```bash
-pf fetch activities=CDK4_HUMAN --output data/cdk4_human_activities.tsv
+pf fetch activity=CDK4_HUMAN --outdir data
 ```
+
+上記は`data/CDK4_HUMAN_activity.tsv`(`<出力ディレクトリ>/<識別子>_activity.tsv`)として保存される。
 
 識別子には以下のいずれの形式を与えてもよい(自動判別して相互変換する)。
 
@@ -30,25 +34,26 @@ SMILESがパースできない、またはpChEMBL値が欠損している記録�
 
 ### 構造データの取得(RCSB PDB / AlphaFold DB)
 
-単体取得。`--type`(`cif`/`pdb`)でフォーマットを明示できる。省略時は出力ファイルの拡張子(`.cif` / `.pdb`)から推定する。
+`--type`(`cif`/`pdb`)でフォーマットを指定する(省略時は`cif`)。
 既定の取得元はRCSB PDB(識別子はPDB ID)。`--af`を付けるとAlphaFold DB(識別子はUniProt
-entry name(例: `TYK2_HUMAN`)またはaccession(例: `P29597`)のいずれでもよい。entry nameは
-内部で`idmap.resolve_uniprot_accession`によりaccessionに解決される)から取得する。
+entry name(例: `TYK2_HUMAN`)またはaccession(例: `P29597`)のいずれでもよい。ダウンロード用の
+accessionは内部で`idmap.resolve_uniprot_accession`により解決される)から取得する。
+
+識別子はカンマ区切りで複数指定できる(区切りがなければ単体扱い)。各ファイルは
+`<出力ディレクトリ>/<識別子>.<拡張子>`として保存される。ただし`--af`指定時はファイル名に
+UniProt accession(識別子にentry nameを与えた場合でも、内部で`idmap.resolve_uniprot_accession`
+により解決したaccession)に`_AF`を付けたものを使う。
 
 ```bash
-pf fetch structure=9CSK --type=cif --output data/9csk.cif
-pf fetch structure=P61626 --af --type=cif --output data/P61626.cif
-pf fetch structure=TYK2_HUMAN --af --type=cif --output data/tyk2/TYK2_HUMAN_af.cif
+pf fetch structure=9CSK --type=cif --outdir data
+pf fetch structure=6P8F,7SJ3,9CSK --type pdb --outdir data
+pf fetch structure=P61626 --af --type=cif --outdir data
+pf fetch structure=CDK1_HUMAN --af --type=cif --outdir data/cdk1
+pf fetch structure=P61626,CDK4_HUMAN --af --type pdb --outdir data
 ```
 
-複数の識別子をカンマ区切りでまとめて取得することもできる(`structures=`、複数形)。
-この場合`--output`は出力ディレクトリになり、各ファイルは`<出力ディレクトリ>/<識別子>.<拡張子>`として保存される。
-`--type`は必須(ディレクトリ名からはフォーマットを推定できないため)。`--af`の扱いは単体取得と同じ。
-
-```bash
-pf fetch structures=6P8F,7SJ3,9CSK --type pdb --output data
-pf fetch structures=P61626,CDK4_HUMAN --af --type pdb --output data
-```
+`structure=P61626 --af`は`data/P61626_AF.cif`として、
+`structure=CDK1_HUMAN --af`は`data/cdk1/O14519_AF.cif`(entry nameから解決したaccession)として保存される。
 
 ## 関数一覧
 

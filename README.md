@@ -58,7 +58,7 @@
 
 | コマンド | 機能 | 例 |
 | --- | --- | --- |
-| [`pf fetch`](fetcher/README.md) | ChEMBL活性データ、RCSB PDB/AlphaFold DB構造データの取得 | `pf fetch activities=CDK4_HUMAN --output data/cdk4_human_activities.tsv` |
+| [`pf fetch`](fetcher/README.md) | ChEMBL活性データ、RCSB PDB/AlphaFold DB構造データの取得 | `pf fetch activity=CDK4_HUMAN --outdir data` |
 | [`pf analyze-scaffolds`](scaffoldanalyzer/README.md) | Bemis-Murckoスキャフォールド単位での活性高低分布の比較 | `pf analyze-scaffolds data/cdk4_human_activities.tsv --output-dir data/cdk4_scaffold_analysis` |
 | [`pf prep-protein`](proteinprep/README.md) | PDBFixerによる蛋白構造の欠損原子補完・プロトン化 | `pf prep-protein data/9csk.cif --output data/9csk_dock.pdb --mode dock` |
 | [`pf protein-info`](proteinanalyzer/README.md) | UniProtからの創薬向け蛋白情報取得(JSON出力) | `pf protein-info EGFR_HUMAN --output data/egfr_info.json` |

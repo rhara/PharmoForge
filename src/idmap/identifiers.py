@@ -12,7 +12,7 @@ from core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
-UNIPROT_SEARCH_URL = "https://rest.uniprot.org/uniprotkb/search"
+UNIPROT_ENTRY_URL = "https://rest.uniprot.org/uniprotkb/{identifier}.json"
 CHEMBL_TARGET_URL = "https://www.ebi.ac.uk/chembl/api/data/target.json"
 
 _CHEMBL_ID_RE = re.compile(r"^CHEMBL\d+$", re.IGNORECASE)
@@ -30,18 +30,20 @@ def looks_like_uniprot_accession(identifier: str) -> bool:
 
 
 def entry_name_to_accession(entry_name: str) -> str:
-    """UniProt entry name(例: CDK4_HUMAN)をaccession(例: P11802)に変換する。"""
+    """UniProt entry name(例: CDK4_HUMAN)をaccession(例: P11802)に変換する。
+
+    エントリ取得エンドポイント(`/uniprotkb/{id}.json`)はentry name/accessionのどちらを
+    与えても該当accessionへ直接解決される(あいまいさのない一意な解決)。検索エンドポイント
+    (`query=id:...`)はトークン化された全文検索であり、無関係のエントリ(例: `CDK1_HUMAN`に対する
+    `CDKA1_HUMAN`)が先頭に返ることがあるため使わない。
+    """
+    entry_name = entry_name.strip()
     logger.info("Resolving UniProt entry name %s -> accession ...", entry_name)
-    resp = requests.get(
-        UNIPROT_SEARCH_URL,
-        params={"query": f"id:{entry_name}", "fields": "accession", "format": "json", "size": 1},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    results = resp.json().get("results", [])
-    if not results:
+    resp = requests.get(UNIPROT_ENTRY_URL.format(identifier=entry_name), timeout=30)
+    if resp.status_code == 400:
         raise ValueError(f"UniProt entry name not found: {entry_name}")
-    accession = results[0]["primaryAccession"]
+    resp.raise_for_status()
+    accession = resp.json()["primaryAccession"]
     logger.info("  -> %s", accession)
     return accession
 

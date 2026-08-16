@@ -17,10 +17,23 @@ def test_looks_like_uniprot_accession():
 @patch("idmap.identifiers.requests.get")
 def test_entry_name_to_accession(mock_get):
     mock_get.return_value = MagicMock(
-        json=lambda: {"results": [{"primaryAccession": "P11802"}]},
+        status_code=200,
+        json=lambda: {"primaryAccession": "P11802", "uniProtkbId": "CDK4_HUMAN"},
         raise_for_status=lambda: None,
     )
     assert identifiers.entry_name_to_accession("CDK4_HUMAN") == "P11802"
+    called_url = mock_get.call_args[0][0]
+    assert called_url == "https://rest.uniprot.org/uniprotkb/CDK4_HUMAN.json"
+
+
+@patch("idmap.identifiers.requests.get")
+def test_entry_name_to_accession_not_found(mock_get):
+    mock_get.return_value = MagicMock(status_code=400)
+    try:
+        identifiers.entry_name_to_accession("NOT_A_REAL_PROTEIN_HUMAN")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
 
 
 @patch("idmap.identifiers.requests.get")
