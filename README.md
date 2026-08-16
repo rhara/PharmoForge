@@ -39,18 +39,22 @@
 | `src/molscaffold` | 化合物のBemis-Murckoスキャフォールド計算。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
 | `src/actbin` | 活性値の分位点ビニング(high/mid/low分類)。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
 | `src/structfit` | 残基番号の対応のみに基づく剛体重ね合わせ計算(ProDy)。`alignview`(`--method number`)向けにアトミックな技術要素として切り出した |
-| `src/structio` | PDB/CIF構造ファイルの読み書き(拡張子で自動判別、ProDy)。`structfit`/`proteinextract`の共通処理としてアトミックな技術要素に切り出した |
+| `src/structio` | PDB/CIF構造ファイルの読み書き(拡張子で自動判別、ProDy)・`--indir`解決ロジック(`resolve_structure_tokens()`)。`structfit`/`proteinextract`/`alignview`/`sequencealign`の共通処理としてアトミックな技術要素に切り出した |
+| `src/seqextract` | 構造(ProDy Atomic)からの蛋白チェーン配列(1文字表記)+残基番号の抽出。当初`sequencealign`固有だったがアトミックな技術要素として独立させた |
+| `src/structcompare` | 構造間のチェーン単位配列比較(ProDyの`matchChains`ラッパー、%identity/%overlap・残基置換検出)。当初`sequencealign`固有だったがアトミックな技術要素として独立させた |
+| `src/seqalign` | 構造を伴わない任意アミノ酸配列同士のペアワイズグローバルアラインメント(Biopython `PairwiseAligner`)。当初`sequencealign`固有だったがアトミックな技術要素として独立させた |
 | `src/fetcher` | ChEMBL活性データの標準化・集約・TSV書き出し、RCSB PDB/AlphaFold DB構造データ取得のCLI([詳細](fetcher/README.md)) |
 | `src/scaffoldanalyzer` | Bemis-Murckoスキャフォールド単位での活性高低の分布比較([詳細](scaffoldanalyzer/README.md)) |
 | `src/proteinprep` | PDBFixerによる蛋白構造の欠損原子補完・プロトン化([詳細](proteinprep/README.md)) |
 | `src/proteinanalyzer` | UniProtからの創薬向け蛋白情報取得CLI([詳細](proteinanalyzer/README.md)) |
 | `src/proteinextract` | 構造ファイルから指定チェーンの抽出・水分子の除去([詳細](proteinextract/README.md)) |
 | `src/alignview` | 複数のPDB/CIF構造をPyMOLで開き先頭構造にアラインして表示([詳細](alignview/README.md)) |
+| `src/sequencealign` | 複数のPDB/CIF構造の蛋白配列比較(FASTA・pairwise identity・残基置換一覧)([詳細](sequencealign/README.md)) |
 
 `pf`コマンド自体は`src/core/cli.py`のclickグループが起点となり、各機能パッケージがサブコマンドを登録する。
 サブコマンド一覧は[`pf`コマンド一覧](#pfコマンド一覧)を参照。
 
-アトミックなパッケージ(`core`/`idmap`/`chembl`/`molstd`/`rcsb`/`afdb`/`uniprot`/`molscaffold`/`actbin`/`structfit`/`structio`等)の関数一覧は[API.md](API.md)を参照。
+アトミックなパッケージ(`core`/`idmap`/`chembl`/`molstd`/`rcsb`/`afdb`/`uniprot`/`molscaffold`/`actbin`/`structfit`/`structio`/`seqextract`/`structcompare`/`seqalign`等)の関数一覧は[API.md](API.md)を参照。
 
 ## `pf`コマンド一覧
 
@@ -61,9 +65,10 @@
 | [`pf fetch`](fetcher/README.md) | ChEMBL活性データ、RCSB PDB/AlphaFold DB構造データの取得 | `pf fetch activity=CDK4_HUMAN --outdir data` |
 | [`pf analyze-scaffolds`](scaffoldanalyzer/README.md) | Bemis-Murckoスキャフォールド単位での活性高低分布の比較 | `pf analyze-scaffolds data/cdk4_human_activities.tsv --output-dir data/cdk4_scaffold_analysis` |
 | [`pf prep-protein`](proteinprep/README.md) | PDBFixerによる蛋白構造の欠損原子補完・プロトン化 | `pf prep-protein data/9csk.cif --output data/9csk_dock.pdb --mode dock` |
-| [`pf protein-info`](proteinanalyzer/README.md) | UniProtからの創薬向け蛋白情報取得(JSON出力) | `pf protein-info EGFR_HUMAN --output data/egfr_info.json` |
+| [`pf protein-info`](proteinanalyzer/README.md) | UniProtからの創薬向け蛋白情報取得(JSON出力、省略時は標準出力) | `pf protein-info EGFR_HUMAN --output data/egfr_info.json` |
 | [`pf protein-extract`](proteinextract/README.md) | 構造ファイルから指定チェーンの抽出・水分子の除去 | `pf protein-extract data/cdk2/2CCH.cif --chains=A,G,H,I,J --remove-water --output data/cdk2/2CCH_main.cif` |
 | [`pf align-view`](alignview/README.md) | 複数のPDB/CIF構造をPyMOLで開き先頭構造にアラインして表示 | `pf align-view data/tyk2/TYK2_HUMAN_af.cif data/tyk2/6NZP.cif data/tyk2/4OLI.cif data/tyk2/5C03.cif` |
+| [`pf sequence-align`](sequencealign/README.md) | 複数構造の蛋白配列比較(FASTA・pairwise identity・基準配列に対する残基置換一覧) | `pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --reference P24941_AF:A` |
 
 全コマンド共通で `pf <コマンド> --help` により引数の詳細を確認できる。
 

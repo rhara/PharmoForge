@@ -24,19 +24,21 @@ UniProtエントリの全項目のうち、創薬向け標準セットとして�
 ## CLI仕様
 
 ```
-pf protein-info <識別子> --output <出力JSONファイル>
+pf protein-info <識別子> [--output <出力JSONファイル>]
 ```
 
 - `<識別子>` はUniProt entry name(例: `EGFR_HUMAN`)またはaccession(例: `P00533`)。
   `src/idmap`の`looks_like_uniprot_accession()`で判別し、entry nameの場合は`entry_name_to_accession()`で変換する。
-- `--output` / `-o` は必須。
+- `--output` / `-o` は省略可能。省略時は標準出力にJSONを出力する(`jq`等へのパイプ利用を想定)。
 
 ### 処理の流れ(`src/proteinanalyzer/cli.py`)
 
 1. 識別子をaccessionに解決(`src/idmap`)。
 2. `src/uniprot.fetch_protein_info(accession)` でUniProt REST API(`https://rest.uniprot.org/uniprotkb/{accession}.json`)
    からエントリJSONを取得し、創薬関連情報のdictに変換する。
-3. `src/proteinanalyzer/report.write_protein_info_json()` でJSON(インデント付き、`ensure_ascii=False`)として書き出す。
+3. `--output`指定時は`src/proteinanalyzer/report.write_protein_info_json()`でJSON
+   (インデント付き、`ensure_ascii=False`)として書き出す。省略時は
+   `report.format_protein_info_json()`で整形した同内容のJSON文字列を標準出力に出す。
 
 ## `src/uniprot` の実装詳細(`entry.py`)
 
@@ -55,7 +57,7 @@ pf protein-info <識別子> --output <出力JSONファイル>
 ## 実装ファイル
 
 - `src/uniprot/entry.py` — UniProtエントリ取得・情報抽出(アトミックな技術要素として分離)
-- `src/proteinanalyzer/report.py` — 蛋白情報dictのJSON書き出し(proteinanalyzer固有)
+- `src/proteinanalyzer/report.py` — 蛋白情報dictのJSON整形・書き出し(proteinanalyzer固有)
 - `src/proteinanalyzer/cli.py` — `pf protein-info` サブコマンド
 
 ## テスト
@@ -74,4 +76,5 @@ AlphaFold DBエントリ、活性部位・ATP結合部位・25件のジスルフ
 
 ```bash
 pf protein-info EGFR_HUMAN --output data/egfr_info.json
+pf protein-info EGFR_HUMAN | jq .pdb_structures
 ```

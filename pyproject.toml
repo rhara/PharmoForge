@@ -16,6 +16,7 @@ dependencies = [
     "openmm",
     "pdbfixer",
     "prody",  # conda-forgeでのビルド提供が不安定なためpipでインストールする
+    "biopython",
 ]
 
 [project.optional-dependencies]

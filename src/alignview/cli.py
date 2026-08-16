@@ -1,53 +1,8 @@
-from pathlib import Path
-
 import click
 
+from structio.resolve import resolve_structure_tokens
+
 from .view import launch_alignment_view
-
-# 拡張子省略時に試す順(優先度順)
-_AUTO_EXTENSIONS = (".cif", ".pdb")
-
-
-def _resolve_structure_paths(tokens: tuple[str, ...]) -> list[Path]:
-    """`--indir`と拡張子省略に対応しつつ、tokens列を構造ファイルパスのリストに解決する。"""
-    paths: list[Path] = []
-    indir: Path | None = None
-    i = 0
-    while i < len(tokens):
-        token = tokens[i]
-        if token == "--indir":
-            i += 1
-            if i >= len(tokens):
-                raise click.UsageError("--indir にはディレクトリを指定してください")
-            indir = Path(tokens[i])
-            i += 1
-            continue
-        paths.append(_resolve_one(token, indir))
-        i += 1
-    if not paths:
-        raise click.UsageError("構造ファイルを1つ以上指定してください")
-    return paths
-
-
-def _resolve_one(token: str, indir: Path | None) -> Path:
-    raw = Path(token)
-    # "/"を含む(または絶対パスの)指定は--indirによらずそのまま(カレント相対 or 絶対)扱う
-    if indir is None or "/" in token or raw.is_absolute():
-        base = raw
-    else:
-        base = indir / raw
-
-    if base.suffix:
-        if not base.exists():
-            raise click.UsageError(f"ファイルが見つかりません: {base}")
-        return base
-
-    for ext in _AUTO_EXTENSIONS:
-        candidate = base.with_suffix(ext)
-        if candidate.exists():
-            return candidate
-    tried = ", ".join(str(base.with_suffix(ext)) for ext in _AUTO_EXTENSIONS)
-    raise click.UsageError(f"ファイルが見つかりません({tried})")
 
 
 @click.command("align-view", context_settings={"ignore_unknown_options": True})
@@ -99,5 +54,5 @@ def align_view_cmd(tokens: tuple[str, ...], method: str, align_margin: int, pymo
       pf align-view --indir data/cyp P08604_AF 1PQ2_ad --indir data/other 9XYZ
       pf align-view data/TYK2_HUMAN_af.cif data/6NZP.cif --method number
     """
-    structure_paths = _resolve_structure_paths(tokens)
+    structure_paths = resolve_structure_tokens(tokens)
     launch_alignment_view(structure_paths, method=method, pymol_env=pymol_env, align_margin=align_margin)

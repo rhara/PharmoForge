@@ -5,16 +5,19 @@ UniProtから、計算化学・メディシナルケミストリーに役立つ�
 ## 使い方
 
 ```bash
-pf protein-info <識別子> --output <出力JSONファイル>
+pf protein-info <識別子> [--output <出力JSONファイル>]
 ```
 
 ```bash
 pf protein-info EGFR_HUMAN --output data/egfr_info.json
 pf protein-info P00533 --output data/egfr_info.json
+pf protein-info EGFR_HUMAN | jq .pdb_structures
 ```
 
 `<識別子>` にはUniProt entry name(例: `EGFR_HUMAN`)またはaccession(例: `P00533`)のいずれを与えてもよい
 (entry nameは共通パッケージ[`src/idmap`](../src/idmap)でaccessionに変換される)。
+
+`--output` / `-o` は省略可能。省略時は標準出力にJSONを出力する(`jq`等へのパイプ利用を想定)。
 
 ### 出力
 
@@ -48,7 +51,8 @@ UniProt REST APIのエントリJSONから、以下の項目を抽出したJSON�
 - UniProtエントリの取得・情報抽出そのものは共通パッケージ[`src/uniprot`](../src/uniprot)で行う
   (`fetch_entry()`で生JSON取得、`extract_protein_info()`でdictに整理。アトミックな技術要素として独立)。
 - 識別子(entry name/accession)の解決は共通パッケージ[`src/idmap`](../src/idmap)を利用する。
-- 取得した蛋白情報をJSONファイルへ書き出す処理のみが本機能固有(`src/proteinanalyzer/report.py`)。
+- 取得した蛋白情報をJSON化する処理(整形・ファイル書き出し)のみが本機能固有(`src/proteinanalyzer/report.py`)。
+  `--output`省略時は標準出力にJSONを出す。
 
 ## テスト
 
