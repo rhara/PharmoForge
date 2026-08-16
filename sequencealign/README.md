@@ -48,10 +48,11 @@ pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
    ([`structcompare`](../API.md#srcstructcompare)、`matchChains`)。
 3. **整列表示(残基番号ベース)**: 全構造・全蛋白チェーンの配列を、残基番号を共通の軸として
    縦に並べて表示する(`--width`残基/行、既定100で折り返し)。各ブロックの直上に10残基ごとの
-   位置番号+`|`の目盛り(ルーラー)を表示する(ブロック左端に近く数字全体が収まらない目盛りは、
-   実際の値を誤読させないよう省略する)。配列アラインメントは行わず、構造間でPDBの残基番号が
-   揃っている前提で並べる(`pf align-view --method number`と同じ前提)。観測されていない残基は
-   `-`で埋める。異なる蛋白の構造を混在させると無意味な結果になるため、通常は同一蛋白の複数構造を
+   位置番号+`|`の目盛り(ルーラー)を表示する(右揃えでは収まらない目盛りは、`|`は本来の列の
+   まま数字だけをブロック左端に寄せて表示し、値の欠落・誤読を防ぐ)。配列アラインメントは行わず、
+   構造間でPDBの残基番号が揃っている前提で並べる(`pf align-view --method number`と同じ前提)。
+   観測されていない残基は`-`で埋める。異なる蛋白の構造を混在させると無意味な結果になるため、
+   通常は同一蛋白の複数構造を
    対象とする。
 4. **基準配列に対する置換**(`--reference`指定時のみ): 基準に対する各構造の残基置換
    (例: `V600E`)一覧。`ラベル:チェーンID`基準の場合は`資源:残基番号:置換後`、配列基準の場合は
@@ -106,7 +107,6 @@ CDK2(P24941)のAlphaFoldモデルと結晶構造2件の整列表示(残基番号
 ```bash
 pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
 # == Alignment (by residue number) ==
-# -- 1-100 --
 #                      10        20        30        40        50        60        70        80        90       100
 #                       |         |         |         |         |         |         |         |         |         |
 # P24941_AF:A  MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP

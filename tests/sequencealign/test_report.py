@@ -127,7 +127,6 @@ def test_format_mutation_report_vs_sequence_shows_gap(structures_with_gap):
 def test_format_alignment_block_lines_up_by_resnum(structures_with_gap):
     block = format_alignment_block(structures_with_gap)
 
-    assert "-- 1-10 --" in block
     assert "ref:A     MENFQKVEKI" in block
     assert "gapped:A  -----KVEK-" in block
 
@@ -149,16 +148,16 @@ def test_format_ruler_no_tick_for_short_block():
     assert numbers == " " * 5
 
 
-def test_format_ruler_omits_tick_that_would_be_truncated_at_left_edge():
-    # start_resnum=449: 最初の10の倍数(450)は列1で、"450"の上位桁がブロック外にはみ出す。
-    # 上位桁が欠けて'0'だけが見える(実際の値を誤読させる)くらいなら目盛りごと省略する。
+def test_format_ruler_left_aligns_number_that_would_overflow_left_edge():
+    # start_resnum=449: 最初の10の倍数(450)は列1で、右揃えだと"450"の上位桁が
+    # ブロック外にはみ出す。上位桁が欠けて'0'だけが見える(実際の値を誤読させる)ことを
+    # 避けるため、列0に寄せて数字全体("450")を表示する。tick自体は本来の列(1)のまま。
     numbers, ticks = _format_ruler(449, 100)
 
-    assert "450" not in numbers
-    assert numbers[:9] == " " * 9  # resnum 450(列1)は省略され、次の460(列11)から始まる
+    assert numbers[0:3] == "450"
+    assert ticks[1] == "|"
     assert numbers[9:12] == "460"
     assert ticks[11] == "|"
-    assert ticks[:11] == " " * 11
 
 
 def test_format_alignment_block_includes_ruler(structures_with_gap):
@@ -181,9 +180,10 @@ def test_format_alignment_block_wraps_at_given_width():
 
     block = format_alignment_block(structures, width=10)
 
-    assert "-- 1-10 --" in block
-    assert "-- 11-20 --" in block
-    assert "-- 21-25 --" in block
+    # 25残基が10残基/行で3ブロック(空行区切り)に折り返される
+    assert len(block.strip("\n").split("\n\n")) == 3
+    assert "a:A  GGGGGGGGGG" in block
+    assert "a:A  GGGGG\n" in block
 
 
 def test_format_alignment_block_empty_when_no_chains(tmp_path):

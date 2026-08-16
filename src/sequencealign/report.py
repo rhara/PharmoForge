@@ -103,10 +103,9 @@ def format_alignment_block(structures: list[LabeledStructure], width: int = DEFA
     for block_start in range(0, total_length, width):
         block_end = min(block_start + width, total_length)
         block_first_resnum = min_resnum + block_start
-        header = f"-- {block_first_resnum}-{min_resnum + block_end - 1} --"
         number_line, tick_line = _format_ruler(block_first_resnum, block_end - block_start)
         indent = " " * (label_width + 2)
-        block_lines = [header, indent + number_line, indent + tick_line]
+        block_lines = [indent + number_line, indent + tick_line]
         block_lines += [f"{label.ljust(label_width)}  {seq[block_start:block_end]}" for label, seq in rows]
         blocks.append("\n".join(block_lines))
     return "\n\n".join(blocks) + "\n"
@@ -116,9 +115,11 @@ def _format_ruler(start_resnum: int, block_width: int) -> tuple[str, str]:
     """10残基ごとに残基番号とその位置を示す目盛り(2行: 数字の行、`|`の行)を作る。
 
     数字はその残基番号の列で右端が揃うように配置する(例: 残基120の場合、'0'が
-    resnum=120の列に来る)。ブロック左端に近く数字全体が収まらない目盛りは、
-    上位の桁が欠けて末尾の'0'だけが見える(実際の値を誤読させる)ことを防ぐため、
-    その目盛り自体を省略する。
+    resnum=120の列に来る)。ただしブロック左端に近く数字全体が右揃えでは収まらない
+    目盛り(通常は各ブロック最初の目盛りのみ)は、上位の桁が欠けて末尾の'0'だけが
+    見える(実際の値を誤読させる)ことを避けるため、ブロック左端(列0)に寄せて
+    数字全体を表示する(`|`自体は本来の列のまま動かさない)。隣接する目盛り同士は
+    10列以上離れており数字は最大4桁のため、この寄せによる重なりは生じない。
     """
     numbers = [" "] * block_width
     ticks = [" "] * block_width
@@ -126,13 +127,13 @@ def _format_ruler(start_resnum: int, block_width: int) -> tuple[str, str]:
         resnum = start_resnum + col
         if resnum % 10 != 0:
             continue
-        digits = str(resnum)
-        start = col - len(digits) + 1
-        if start < 0:
-            continue
         ticks[col] = "|"
+        digits = str(resnum)
+        start = max(0, col - len(digits) + 1)
         for i, d in enumerate(digits):
-            numbers[start + i] = d
+            pos = start + i
+            if pos < block_width:
+                numbers[pos] = d
     return "".join(numbers), "".join(ticks)
 
 
