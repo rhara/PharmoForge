@@ -301,18 +301,33 @@ def _format_mutation_report_vs_sequence(structures: list[LabeledStructure], refe
     return "\n".join(lines) + "\n"
 
 
+def _validate_reference(structures: list[LabeledStructure], reference: str) -> None:
+    """`--reference`の妥当性を検証する(`format_alignment_block`はreference行の追加可否を
+    静かに判定するだけで、存在しないラベル/チェーンや不正な配列文字列を検出しないため、
+    ここで明示的にエラーを出す)。
+    """
+    if ":" in reference:
+        ref_label, _, ref_chain_id = reference.partition(":")
+        ref_structure = _find_structure(structures, ref_label)
+        if ref_structure.atoms.select(f"protein and chain {ref_chain_id}") is None:
+            raise ValueError(f"chain not found: {reference!r}")
+    elif not _SEQUENCE_PATTERN.match(reference.upper()):
+        raise ValueError(
+            "--reference must be either 'label:chain_id' (e.g. P24941_AF:A) "
+            f"or an amino acid sequence (one-letter code): {reference!r}"
+        )
+
+
 def build_report(
     structures: list[LabeledStructure], reference: str | None, align_width: int = DEFAULT_ALIGN_WIDTH
 ) -> str:
-    """FASTA・pairwise identity・整列表示・(reference指定時)置換一覧をまとめたレポートを組み立てる。"""
+    """Pairwise identity・整列表示(reference指定時はreference行を含む)をまとめたレポートを組み立てる。"""
+    if reference:
+        _validate_reference(structures, reference)
     parts = [
-        "== Sequences (FASTA, observed residues only) ==",
-        format_fasta(structures),
         "== Pairwise identity ==",
         format_identity_matrix(structures),
         "== Alignment (by residue number) ==",
         format_alignment_block(structures, width=align_width, reference=reference),
     ]
-    if reference:
-        parts += ["== Substitutions relative to reference ==", format_mutation_report(structures, reference)]
     return "\n".join(parts)

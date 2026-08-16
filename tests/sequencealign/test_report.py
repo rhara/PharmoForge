@@ -98,18 +98,30 @@ def test_format_mutation_report_unknown_structure_label_raises(two_structures):
         format_mutation_report(two_structures, "nonexistent:A")
 
 
-def test_build_report_includes_all_sections(two_structures):
+def test_build_report_includes_pairwise_identity_and_alignment_only(two_structures):
     report = build_report(two_structures, reference="ref:A")
 
-    assert "== Sequences (FASTA, observed residues only) ==" in report
     assert "== Pairwise identity ==" in report
-    assert "== Substitutions relative to reference ==" in report
+    assert "== Alignment (by residue number) ==" in report
+    # FASTA・Substitutionsセクションはユーザー要望により出力しない
+    assert "== Sequences" not in report
+    assert "== Substitutions" not in report
 
 
-def test_build_report_omits_mutation_section_without_reference(two_structures):
-    report = build_report(two_structures, reference=None)
+def test_build_report_includes_reference_row_when_sequence_reference_given(two_structures):
+    report = build_report(two_structures, reference=_COMMON_SEQUENCE)
 
-    assert "== Substitutions relative to reference ==" not in report
+    assert "reference  " in report
+
+
+def test_build_report_raises_for_unknown_reference_label(two_structures):
+    with pytest.raises(ValueError):
+        build_report(two_structures, reference="nonexistent:A")
+
+
+def test_build_report_raises_for_invalid_reference_sequence(two_structures):
+    with pytest.raises(ValueError):
+        build_report(two_structures, reference="not-a-sequence-or-ref")
 
 
 def test_format_mutation_report_vs_structure_shows_gap(structures_with_gap):

@@ -13,9 +13,10 @@ from .report import DEFAULT_ALIGN_WIDTH, build_report, load_labeled_structures
     "--reference",
     default=None,
     help=(
-        "Reference for the substitution list: either 'label:chain_id' (e.g. P24941_AF:A) "
-        "identifying a chain from a loaded structure, or an amino acid sequence (one-letter code) "
-        "given directly. Omit to skip the substitution list."
+        "Reference sequence to add as its own row in the alignment section: either "
+        "'label:chain_id' (e.g. P24941_AF:A) identifying a chain from a loaded structure "
+        "(already shown, so this is a no-op), or an amino acid sequence (one-letter code) "
+        "given directly (added as a 'reference' row)."
     ),
 )
 @click.option(
@@ -34,23 +35,24 @@ from .report import DEFAULT_ALIGN_WIDTH, build_report, load_labeled_structures
     help="Path to save the report to (default: print to stdout).",
 )
 def sequence_align_cmd(tokens: tuple[str, ...], reference: str | None, width: int, output_path: Path | None):
-    """Extract protein sequences from multiple PDB/CIF structures and report FASTA,
-    pairwise identity, a residue-number alignment, and (with --reference) substitutions.
+    """Extract protein sequences from multiple PDB/CIF structures and report
+    pairwise identity and a residue-number alignment.
 
     Sequences are extracted per chain from observed CA atoms only, so residues not
     resolved in the electron density are excluded (this can differ from the full
     UniProt sequence).
 
-    With --reference given, a substitution list is also printed. Two ways to specify it:
+    --reference adds a reference row to the alignment section. Two ways to specify it:
 
     \b
-    - 'label:chain_id' (e.g. P24941_AF:A): use one chain from a loaded structure as the
-      reference. Only residue-number-based correspondence is used (assumes PDB residue
-      numbers line up across structures, same assumption as `pf align-view --method number`).
-      Structures with a different numbering scheme are reported as "no correspondence found".
-    - An amino acid sequence (one-letter code, no colon): use an arbitrary sequence not tied
-      to any structure (e.g. a UniProt canonical sequence) as the reference. This uses a
-      sequence alignment, so it also works across structures whose residue numbers don't align.
+    - 'label:chain_id' (e.g. P24941_AF:A): a chain from a loaded structure. It is
+      already shown as one of the structure rows, so this only validates that the
+      chain exists (raises an error otherwise) and adds nothing new.
+    - An amino acid sequence (one-letter code, no colon): an arbitrary sequence not
+      tied to any structure (e.g. a UniProt canonical sequence), added as a
+      'reference' row. Its first residue is treated as residue number 1 (assumes
+      the same residue numbering as the structures, same assumption as
+      `pf align-view --method number`).
 
     \b
     --indir DIR: repeatable. Resolves following filenames (extension optional, .cif
@@ -61,9 +63,8 @@ def sequence_align_cmd(tokens: tuple[str, ...], reference: str | None, width: in
     Examples:
       pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
       pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --reference P24941_AF:A
-      pf sequence-align data/braf/P15056_AF.cif data/braf/3OG7_ac.cif --reference P15056_AF:A -o report.txt
       pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
-      pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
+      pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160 -o report.txt
     """
     structure_paths = resolve_structure_tokens(tokens)
     structures = load_labeled_structures(structure_paths)

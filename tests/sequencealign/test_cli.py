@@ -28,12 +28,14 @@ def test_sequence_align_prints_report_to_stdout(tmp_path):
     result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(p2)])
 
     assert result.exit_code == 0, result.output
-    assert "== Sequences (FASTA, observed residues only) ==" in result.output
     assert "== Pairwise identity ==" in result.output
-    assert "== Substitutions relative to reference ==" not in result.output
+    assert "== Alignment (by residue number) ==" in result.output
+    # FASTA・Substitutionsセクションはユーザー要望により出力しない
+    assert "== Sequences" not in result.output
+    assert "== Substitutions" not in result.output
 
 
-def test_sequence_align_with_reference_structure(tmp_path):
+def test_sequence_align_with_reference_structure_validates_but_adds_no_section(tmp_path):
     p1 = tmp_path / "ref.pdb"
     p2 = tmp_path / "mut.pdb"
     _write_pdb(p1, _COMMON_RESNAMES)
@@ -42,7 +44,26 @@ def test_sequence_align_with_reference_structure(tmp_path):
     result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(p2), "--reference", "ref:A"])
 
     assert result.exit_code == 0, result.output
-    assert "== Substitutions relative to reference ==" in result.output
+    assert "== Substitutions" not in result.output
+
+
+def test_sequence_align_with_reference_sequence_adds_row_to_alignment(tmp_path):
+    p1 = tmp_path / "ref.pdb"
+    _write_pdb(p1, _COMMON_RESNAMES)
+
+    result = CliRunner().invoke(sequence_align_cmd, [str(p1), "--reference", "GGGGAGGGGG"])
+
+    assert result.exit_code == 0, result.output
+    assert "reference  GGGGAGGGGG" in result.output
+
+
+def test_sequence_align_rejects_unknown_reference_label(tmp_path):
+    p1 = tmp_path / "ref.pdb"
+    _write_pdb(p1, _COMMON_RESNAMES)
+
+    result = CliRunner().invoke(sequence_align_cmd, [str(p1), "--reference", "nonexistent:A"])
+
+    assert result.exit_code != 0
 
 
 def test_sequence_align_indir_resolves_stems(tmp_path):
@@ -51,7 +72,7 @@ def test_sequence_align_indir_resolves_stems(tmp_path):
     result = CliRunner().invoke(sequence_align_cmd, ["--indir", str(tmp_path), "a"])
 
     assert result.exit_code == 0, result.output
-    assert ">a:A" in result.output
+    assert "a:A  G" in result.output
 
 
 def test_sequence_align_writes_output_file(tmp_path):
@@ -63,7 +84,7 @@ def test_sequence_align_writes_output_file(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert out_path.exists()
-    assert "== Sequences (FASTA, observed residues only) ==" in out_path.read_text()
+    assert "== Pairwise identity ==" in out_path.read_text()
 
 
 def test_sequence_align_requires_at_least_one_path():

@@ -158,29 +158,22 @@ pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference
 
 - 構造ファイルの指定は`align-view`と同じトークン解決(`--indir`、拡張子省略時の自動補完)を
   共有する(下記「`--indir`解決ロジックの共通化」参照)。
-- `--reference`省略時は置換一覧セクションを出力しない。
+- `--reference`省略時は整列表示に基準配列の行を加えない。
 - `--width`(既定`DEFAULT_ALIGN_WIDTH=100`)は整列表示セクションの折り返し残基数。
 - `--output`/`-o`省略時は標準出力にレポートを出す。
 
 ### 出力レポートの構成(`src/sequencealign/report.py`)
 
-レポート本文はすべて英語(下記「コマンド出力の英語化」参照)。
+レポート本文はすべて英語(下記「コマンド出力の英語化」参照)。2セクションのみ
+(下記「出力セクションの絞り込み」参照。当初はFASTA配列一覧・基準配列に対する置換一覧の
+セクションもあったが、ユーザー要望により削除した)。
 
-1. `== Sequences (FASTA, observed residues only) ==`: 各構造・各蛋白チェーンの配列
-   (`seqextract.get_chain_sequences()`、CA原子ベース)。
-2. `== Pairwise identity ==`: 全構造の組み合わせについて`structcompare.match_chains()`の結果を一覧化。
-3. `== Alignment (by residue number) ==`: 残基番号ベースの整列表示(上記「整列表示」参照)。
+1. `== Pairwise identity ==`: 全構造の組み合わせについて`structcompare.match_chains()`の結果を一覧化。
+2. `== Alignment (by residue number) ==`: 残基番号ベースの整列表示(上記「整列表示」参照)。
    `--reference`にアミノ酸配列を直接指定した場合は、`reference`行としてこのブロックにも
-   加わる(下記「整列表示への基準配列の追加」参照)。
-4. `== Substitutions relative to reference ==`(`--reference`指定時のみ): 見出し行
-   (`reference: ...`/`reference sequence: ...`)に続けて基準配列自体をFASTA形式(60残基/行)で
-   出力した上で、上記の判定に応じて`structcompare.find_substitutions()`または
-   `seqalign.align_to_reference()`を使用した置換一覧を出力する。置換一覧の各行に続けて、
-   基準に対する欠損領域(「gaps:」行、上記「欠損領域(ギャップ)の可視化」参照)を出力する。
-   基準配列自体の出力は、ユーザーからの「referenceのシーケンスも出力してほしい」という
-   要望を受けて追加した(従来は`ラベル:チェーンID`基準の場合はFASTAセクションを見れば
-   分かったが、アミノ酸配列を直接指定した場合はその配列自体がレポートのどこにも
-   出力されていなかった)。
+   加わる(上記「整列表示への基準配列の追加」参照)。`--reference`指定時は`_validate_reference()`
+   により妥当性を検証する(存在しないラベル/チェーンや不正な配列文字列は`ValueError`。
+   下記「出力セクションの絞り込み」参照)。
 
 ### 整列表示への基準配列の追加
 
@@ -198,6 +191,26 @@ pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference
 含まれているため、重複追加はしない(`format_alignment_block(structures)`と
 `format_alignment_block(structures, reference="label:chain")`の出力が完全に一致することを
 テストで確認)。
+
+## 出力セクションの絞り込み(FASTA・Substitutionsセクションの削除)
+
+上記の対応の直後、ユーザーから「`== Sequences (FASTA, observed residues only) ==`セクションは
+いりません。`== Substitutions relative to reference ==`セクションもいりません」との明確な指示を
+受けた。レポートを「Pairwise identity」「Alignment(整列表示)」の2セクションのみに絞り込んだ。
+
+- `build_report()`から`format_fasta()`/`format_mutation_report()`の呼び出しを削除。
+- ただし`format_fasta()`・`format_mutation_report()`(および内部で使う`structcompare`/`seqalign`の
+  置換・欠損検出ロジック)自体は削除せず残した(それぞれ単体テストが存在し、独立して再利用しうる
+  ビルディングブロックであるため。BRAF V600E検出等ですでに実データ検証済みの機能でもあり、
+  「セクションが不要」という指示を「機能自体の削除」まで拡大解釈しないよう留意した)。
+- 一方、`--reference`のバリデーション(存在しないラベル/チェーンや不正な配列文字列でのエラー)は
+  従来`format_mutation_report()`内で行っていたため、これを呼ばなくなると静かに握りつぶされて
+  しまう(`format_alignment_block()`はreference行を追加できるかを静かに判定するだけで、
+  無効な入力に対してエラーを出さない設計のため)。これを避けるため`_validate_reference()`を
+  新設し、`build_report()`が`reference`指定時に必ず呼ぶことで、以前と同じエラーメッセージ
+  (`chain not found: ...`/`--reference must be either ...`)を維持した。
+- `--help`の説明文(`src/sequencealign/cli.py`)も、`--reference`の役割が「整列表示への基準行
+  追加」に変わったことに合わせて全面的に書き直した。
 
 ## `--indir`解決ロジックの共通化
 
@@ -231,12 +244,14 @@ pytest tests/sequencealign tests/seqextract tests/structcompare tests/seqalign t
 ## 動作例(実データ)
 
 ```bash
-pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --reference P24941_AF:A
-# => 1AQ1_ab: no substitutions (...)
-#      gaps: reference only (missing in target): 36-43, 149-161
-pf sequence-align --indir data/braf P15056_AF 4MNF_ac --reference P15056_AF:A
-# => 4MNF_ac: 1 substitution(s) (seqid=99.6%, overlap=33.6%): V600E
-#      gaps: reference only (missing in target): 1-448, 601-615, 721-766
+pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
 pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
+# => reference行がAlignmentセクションに追加される
 pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
 ```
+
+(出力セクション絞り込み前の動作例。BRAF(P15056)のAlphaFoldモデルと結晶構造4MNFを
+`--reference P15056_AF:A`で比較すると既知の発がん性変異V600Eが正しく検出されることを確認した
+記録は、上記「基準配列に対する置換の判定」節、および`structcompare`/`seqalign`の実装記録参照。
+現在のレポート出力には含まれないが、`format_mutation_report()`自体は残っており
+`pytest tests/sequencealign -k mutation_report`で動作確認できる。)
