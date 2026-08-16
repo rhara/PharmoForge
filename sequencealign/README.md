@@ -54,11 +54,13 @@ pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
    観測されていない残基は`-`で埋める。異なる蛋白の構造を混在させると無意味な結果になるため、
    通常は同一蛋白の複数構造を
    対象とする。
-4. **基準配列に対する置換**(`--reference`指定時のみ): 基準に対する各構造の残基置換
-   (例: `V600E`)一覧。`ラベル:チェーンID`基準の場合は`資源:残基番号:置換後`、配列基準の場合は
-   基準配列内の位置と構造側の実際の残基番号を併記する(例: `V600E(構造残基番号=600)`)。
-   置換とは別に、基準に対して欠損している(または基準にない)領域を`欠損:`行で示す
-   (PDB構造は電子密度が見えない領域(N/C末端の未解析部分・ループ等)が欠落することが多いため)。
+4. **基準配列に対する置換**(`--reference`指定時のみ): 見出し行(`reference: ...`または
+   `reference sequence: ...`)に続けて基準配列自体をFASTA形式(60残基/行)で出力した上で、
+   基準に対する各構造の残基置換(例: `V600E`)一覧を示す。`ラベル:チェーンID`基準の場合は
+   `資源:残基番号:置換後`、配列基準の場合は基準配列内の位置と構造側の実際の残基番号を併記する
+   (例: `V600E(構造残基番号=600)`)。置換とは別に、基準に対して欠損している(または基準にない)
+   領域を`欠損:`行で示す(PDB構造は電子密度が見えない領域(N/C末端の未解析部分・ループ等)が
+   欠落することが多いため)。
 
 ## 実装方針
 
@@ -96,6 +98,8 @@ pf sequence-align --indir data/braf P15056_AF 4MNF_ac 3OG7_ac --reference P15056
 # ...
 # == Substitutions relative to reference ==
 # reference: P15056_AF:A
+# MAALSGGGGGGAEPGQALFNGDMEPEAGAGAGAAASSAADPAIPEEVWNIKQMIKLTQEH
+# ...(以下、基準配列がFASTA形式(60残基/行)で続く)
 #   4MNF_ac: 1 substitution(s) (seqid=99.6%, overlap=33.6%): V600E
 #     gaps: reference only (missing in target): 1-448, 601-615, 721-766
 #   3OG7_ac: 14 substitution(s) (seqid=94.3%, overlap=32.2%): K522A, I543A, ...

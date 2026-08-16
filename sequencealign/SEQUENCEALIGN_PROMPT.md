@@ -170,10 +170,15 @@ pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference
    (`seqextract.get_chain_sequences()`、CA原子ベース)。
 2. `== Pairwise identity ==`: 全構造の組み合わせについて`structcompare.match_chains()`の結果を一覧化。
 3. `== Alignment (by residue number) ==`: 残基番号ベースの整列表示(上記「整列表示」参照)。
-4. `== Substitutions relative to reference ==`(`--reference`指定時のみ): 上記の判定に応じて
-   `structcompare.find_substitutions()`または`seqalign.align_to_reference()`を使用。
-   置換一覧の各行に続けて、基準に対する欠損領域(「gaps:」行、上記「欠損領域(ギャップ)の
-   可視化」参照)を出力する。
+4. `== Substitutions relative to reference ==`(`--reference`指定時のみ): 見出し行
+   (`reference: ...`/`reference sequence: ...`)に続けて基準配列自体をFASTA形式(60残基/行)で
+   出力した上で、上記の判定に応じて`structcompare.find_substitutions()`または
+   `seqalign.align_to_reference()`を使用した置換一覧を出力する。置換一覧の各行に続けて、
+   基準に対する欠損領域(「gaps:」行、上記「欠損領域(ギャップ)の可視化」参照)を出力する。
+   基準配列自体の出力は、ユーザーからの「referenceのシーケンスも出力してほしい」という
+   要望を受けて追加した(従来は`ラベル:チェーンID`基準の場合はFASTAセクションを見れば
+   分かったが、アミノ酸配列を直接指定した場合はその配列自体がレポートのどこにも
+   出力されていなかった)。
 
 ## `--indir`解決ロジックの共通化
 

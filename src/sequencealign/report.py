@@ -222,7 +222,7 @@ def _format_mutation_report_vs_structure(structures: list[LabeledStructure], ref
         raise ValueError(f"chain not found: {reference!r}")
     ref_chain = _find_chain(ref_structure, ref_chain_id)
 
-    lines = [f"reference: {reference}"]
+    lines = [f"reference: {reference}", _wrap(ref_chain.sequence) if ref_chain else ""]
     for s in structures:
         if s.label == ref_label:
             continue
@@ -255,7 +255,7 @@ def _format_mutation_report_vs_sequence(structures: list[LabeledStructure], refe
             f"or an amino acid sequence (one-letter code): {reference!r}"
         )
 
-    lines = [f"reference sequence: {len(ref_sequence)} residues"]
+    lines = [f"reference sequence: {len(ref_sequence)} residues", _wrap(ref_sequence)]
     for s in structures:
         if not s.chains:
             lines.append(f"  {s.label}: no protein chains found")

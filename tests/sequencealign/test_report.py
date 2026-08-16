@@ -72,6 +72,7 @@ def test_format_mutation_report_vs_structure_reference(two_structures):
     report = format_mutation_report(two_structures, "ref:A")
 
     assert "reference: ref:A" in report
+    assert _COMMON_SEQUENCE in report  # 基準チェーンの配列自体も出力される
     assert "mut: 1 substitution(s)" in report
     assert "A5S" in report
 
@@ -80,6 +81,7 @@ def test_format_mutation_report_vs_sequence_reference(two_structures):
     report = format_mutation_report(two_structures, _COMMON_SEQUENCE)
 
     assert "reference sequence: 10 residues" in report
+    assert _COMMON_SEQUENCE in report  # 指定した基準配列自体も出力される
     assert "ref:A: no substitutions" in report
     assert "mut:A: 1 substitution(s)" in report
     assert "A5S" in report
