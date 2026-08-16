@@ -133,6 +133,24 @@ def test_format_alignment_block_lines_up_by_resnum(structures_with_gap):
     assert "gapped:A  -----KVEK-" in block
 
 
+def test_format_alignment_block_includes_sequence_reference_row(structures_with_gap):
+    block = format_alignment_block(structures_with_gap, reference=_VARIED_SEQUENCE)
+
+    assert "reference  MENFQKVEKI" in block
+    assert "ref:A      MENFQKVEKI" in block
+    assert "gapped:A   -----KVEK-" in block
+
+
+def test_format_alignment_block_does_not_duplicate_structure_reference(structures_with_gap):
+    # ラベル:チェーンID基準の場合、そのチェーンはすでにstructures側の行として
+    # 含まれているため、reference用の行を別途追加しない。
+    block_without_ref = format_alignment_block(structures_with_gap)
+    block_with_ref = format_alignment_block(structures_with_gap, reference="ref:A")
+
+    assert block_without_ref == block_with_ref
+    assert "reference " not in block_with_ref
+
+
 def test_format_ruler_places_number_and_tick_at_multiples_of_ten():
     numbers, ticks = _format_ruler(101, 100)
 

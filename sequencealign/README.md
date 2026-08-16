@@ -53,7 +53,9 @@ pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
    構造間でPDBの残基番号が揃っている前提で並べる(`pf align-view --method number`と同じ前提)。
    観測されていない残基は`-`で埋める。異なる蛋白の構造を混在させると無意味な結果になるため、
    通常は同一蛋白の複数構造を
-   対象とする。
+   対象とする。`--reference`にアミノ酸配列を直接指定した場合は、`reference`という行としてこの
+   整列表示にも加える(基準配列の1文字目を残基番号1として扱う)。`ラベル:チェーンID`基準の
+   場合は、対応するチェーンがすでに構造側の行として含まれているため重複追加はしない。
 4. **基準配列に対する置換**(`--reference`指定時のみ): 見出し行(`reference: ...`または
    `reference sequence: ...`)に続けて基準配列自体をFASTA形式(60残基/行)で出力した上で、
    基準に対する各構造の残基置換(例: `V600E`)一覧を示す。`ラベル:チェーンID`基準の場合は
@@ -116,4 +118,15 @@ pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
 # P24941_AF:A  MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
 # 1AQ1_ab:A    MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKI--------VPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
 # 1HCL_a:A     MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIR----TEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
+```
+
+`--reference`にアミノ酸配列を直接指定した場合は、`reference`行としてこの整列表示にも加わる:
+
+```bash
+pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab
+# == Alignment (by residue number) ==
+#                    10        20        30        40        50        60        70        80        90       100
+#                     |         |         |         |         |         |         |         |         |         |
+# reference  MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
+# 1AQ1_ab:A  MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKI--------VPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
 ```

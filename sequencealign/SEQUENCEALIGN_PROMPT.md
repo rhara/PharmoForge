@@ -170,6 +170,8 @@ pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference
    (`seqextract.get_chain_sequences()`、CA原子ベース)。
 2. `== Pairwise identity ==`: 全構造の組み合わせについて`structcompare.match_chains()`の結果を一覧化。
 3. `== Alignment (by residue number) ==`: 残基番号ベースの整列表示(上記「整列表示」参照)。
+   `--reference`にアミノ酸配列を直接指定した場合は、`reference`行としてこのブロックにも
+   加わる(下記「整列表示への基準配列の追加」参照)。
 4. `== Substitutions relative to reference ==`(`--reference`指定時のみ): 見出し行
    (`reference: ...`/`reference sequence: ...`)に続けて基準配列自体をFASTA形式(60残基/行)で
    出力した上で、上記の判定に応じて`structcompare.find_substitutions()`または
@@ -179,6 +181,23 @@ pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference
    要望を受けて追加した(従来は`ラベル:チェーンID`基準の場合はFASTAセクションを見れば
    分かったが、アミノ酸配列を直接指定した場合はその配列自体がレポートのどこにも
    出力されていなかった)。
+
+### 整列表示への基準配列の追加
+
+上記対応の直後、ユーザーから「レファレンスのsequenceを、比較ブロックに出力してほしい。
+`== Substitutions relative to reference ==`のセクションに入りません」との指摘を受けた。
+`--reference`を直接アミノ酸配列で指定した場合、その配列は「Substitutions」セクションには
+出るが「Alignment(比較ブロック)」セクションには出ておらず、他の構造と横並びで見比べられない
+という指摘。
+
+`format_alignment_block()`に`reference`引数を追加し、`reference`がコロンを含まない
+(=アミノ酸配列直接指定)場合、基準配列の1文字目を残基番号1として扱った`reference`行を
+整列表示のエントリ先頭に加えるようにした(基準配列がUniProt正規配列等、通常残基1から
+始まる前提。既存の「構造間でPDBの残基番号が揃っている」前提の延長)。`reference`が
+`ラベル:チェーンID`(構造)の場合は、対応するチェーンがすでに`structures`側の行として
+含まれているため、重複追加はしない(`format_alignment_block(structures)`と
+`format_alignment_block(structures, reference="label:chain")`の出力が完全に一致することを
+テストで確認)。
 
 ## `--indir`解決ロジックの共通化
 

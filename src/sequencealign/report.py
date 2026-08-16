@@ -75,7 +75,9 @@ def format_identity_matrix(structures: list[LabeledStructure]) -> str:
     return "\n".join(rows) + "\n"
 
 
-def format_alignment_block(structures: list[LabeledStructure], width: int = DEFAULT_ALIGN_WIDTH) -> str:
+def format_alignment_block(
+    structures: list[LabeledStructure], width: int = DEFAULT_ALIGN_WIDTH, reference: str | None = None
+) -> str:
     """全構造・全蛋白チェーンの配列を、残基番号を共通の軸として横並びに整列表示する
     (`width`残基ごとに折り返す)。
 
@@ -83,18 +85,29 @@ def format_alignment_block(structures: list[LabeledStructure], width: int = DEFA
     並べる(構造間でPDBの残基番号が揃っている前提。`pf align-view --method number`
     と同じ前提)。観測されていない残基は`-`で埋める。異なる蛋白の構造を混在させると
     無意味な結果になる点に注意(通常は同一蛋白の複数構造を対象とする)。
+
+    `reference`がアミノ酸配列(コロンを含まない)の場合、その配列も`reference`という
+    行として加える。基準配列の1文字目を残基番号1として扱う(基準配列が構造と同じ
+    UniProt番号体系で、通常は残基1から始まる前提)。`reference`が`ラベル:チェーンID`の
+    場合は、対応するチェーンがすでに`structures`側の行として含まれているため何もしない。
     """
-    entries = [(f"{s.label}:{c.chain_id}", c) for s in structures for c in s.chains]
+    entries: list[tuple[str, str, list[int]]] = [
+        (f"{s.label}:{c.chain_id}", c.sequence, c.resnums) for s in structures for c in s.chains
+    ]
+    if reference and ":" not in reference:
+        ref_sequence = reference.upper()
+        if _SEQUENCE_PATTERN.match(ref_sequence):
+            entries.insert(0, ("reference", ref_sequence, list(range(1, len(ref_sequence) + 1))))
     if not entries:
         return "(no protein chains found)\n"
 
-    all_resnums = {r for _, c in entries for r in c.resnums}
+    all_resnums = {r for _, _, resnums in entries for r in resnums}
     min_resnum, max_resnum = min(all_resnums), max(all_resnums)
-    label_width = max(len(label) for label, _ in entries)
+    label_width = max(len(label) for label, _, _ in entries)
 
     rows = []
-    for label, c in entries:
-        seq_by_resnum = dict(zip(c.resnums, c.sequence))
+    for label, sequence, resnums in entries:
+        seq_by_resnum = dict(zip(resnums, sequence))
         padded = "".join(seq_by_resnum.get(r, "-") for r in range(min_resnum, max_resnum + 1))
         rows.append((label, padded))
 
@@ -298,7 +311,7 @@ def build_report(
         "== Pairwise identity ==",
         format_identity_matrix(structures),
         "== Alignment (by residue number) ==",
-        format_alignment_block(structures, width=align_width),
+        format_alignment_block(structures, width=align_width, reference=reference),
     ]
     if reference:
         parts += ["== Substitutions relative to reference ==", format_mutation_report(structures, reference)]
