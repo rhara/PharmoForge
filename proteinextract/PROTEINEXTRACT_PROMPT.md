@@ -38,9 +38,9 @@ pf protein-extract <入力構造ファイル> [--chains=<チェーンID(カン�
 ユーザーの依頼例(`pf protein-extract data/cdk2/2CCH.cif --chains=A,G,H,I,J ...`)で実データ
 検証したところ、`2CCH.cif`は`label_asym_id`基準で17種のチェーン(`A`〜`Q`)を持つのに対し、
 `unite_chains=True`で`auth_asym_id`基準にすると6種(`A`〜`F`)しかなく、依頼例の`G`〜`J`は
-`auth_asym_id`には存在しないことが判明。これはユーザーが(PyMOL等での表示と同じ)`label_asym_id`
-基準のチェーンIDを想定していることを意味するため、ProDyの`parseMMCIF()`の既定(`unite_chains=False`、
-`label_asym_id`をチェーンIDとして扱う)をそのまま使う設計にした。
+`auth_asym_id`には存在しないことが判明。当初はユーザーが(PyMOL等での表示と同じ)`label_asym_id`
+基準のチェーンIDを想定していると解釈し、ProDyの`parseMMCIF()`の既定(`unite_chains=False`、
+`label_asym_id`をチェーンIDとして扱う)をそのまま使う設計にしていた。
 
 また、`--chains`と`--remove-water`を組み合わせて`writeMMCIF()`で書き出すと、出力ファイルを
 再度読み込んだ際のチェーンIDが元のラベル(`A,G,H,I,J`)から振り直されたラベル(`A,B,C,D,E,F,G`)に
@@ -49,6 +49,21 @@ pf protein-extract <入力構造ファイル> [--chains=<チェーンID(カン�
 CIF出力時にチェーンIDのラベルは保証されない。この点はユーザーに確認し、「出力の際、チェーンIDが
 変わっても構わない」との回答を得たため、追加の対処はせずそのままとした。PDB出力
 (`writePDB()`)では元のチェーンIDが保持されることを確認済み。
+
+### 方針転換: `label_asym_id` → `auth_asym_id`(`unite_chains=True`)
+
+後日、ユーザーから改めて「`pf protein-extract`のchain idの出力がおかしい、authのチェーンに
+合わせてほしい」との要望を受けた。`structio.parse_structure()`は`proteinextract`だけでなく
+`alignview`/`structfit`/`sequencealign`(`seqextract`経由)からも共通で使われるアトミックな
+読み込み関数であるため、`proteinextract`だけでなく**この関数自体**を`unite_chains=True`に
+変更する方針をユーザーに確認の上で決定(全コマンドで一貫してauthチェーンIDになる)。
+
+これにより上記の「`--chains`にPyMOL等で見えるIDをそのまま指定できない」問題(`2CCH.cif`で
+リガンド由来の`label_asym_id`(`G`〜`Q`)が本来の著者チェーン`A`〜`F`と食い違う点)を解消した。
+ただしこの変更により、既存の`my_examples.sh`・各機能READMEに残る`label_asym_id`基準の
+チェーン選択例(例: `--chains=A,G,H,I,J`)は実データと食い違うようになるため、要更新
+(この記録の時点では未対応。対応する場合は各構造ファイルの実際の`auth_asym_id`を確認しながら
+個別に見直す必要がある)。
 
 ## テスト
 
@@ -60,8 +75,9 @@ pytest tests/proteinextract tests/structio
 
 ## 動作例(サンプルデータ)
 
-CDK2の結晶構造(複合体)から、蛋白+基質断片(A,G,H,I,J)のみを水を除いて抽出する:
+CDK2の結晶構造(複合体)から、蛋白(authチェーンA。旧label基準のG〜J相当のリガンドも
+auth基準ではAに含まれる)のみを水を除いて抽出する:
 
 ```bash
-pf protein-extract data/cdk2/2CCH.cif --chains=A,G,H,I,J --remove-water --output data/cdk2/2CCH_main.cif
+pf protein-extract data/cdk2/2CCH.cif --chains=A --remove-water --output data/cdk2/2CCH_main.cif
 ```

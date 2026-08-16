@@ -119,7 +119,7 @@ PDB/CIF構造ファイルの読み書き(拡張子で自動判別、[ProDy](http
 
 | 関数 | 説明 |
 | --- | --- |
-| `parse_structure(path: Path) -> Atomic` | PDB/CIF形式の構造ファイルを拡張子(`.pdb`/`.cif`/`.mmcif`)で自動判別して読み込む。 |
+| `parse_structure(path: Path) -> Atomic` | PDB/CIF形式の構造ファイルを拡張子(`.pdb`/`.cif`/`.mmcif`)で自動判別して読み込む。CIFは`unite_chains=True`で読み込み、チェーンIDに`auth_asym_id`(PyMOLやRCSB Webサイトで見えるチェーンID)を使う(ProDyの既定`label_asym_id`は同じauthチェーンに属する水分子・リガンド等を別チェーンに細分化するため)。 |
 | `write_structure(atoms: Atomic, path: Path) -> None` | ProDyの`AtomGroup`(または`select()`の結果)を、拡張子で自動判別したPDB/CIF形式で書き出す。出力先ディレクトリが存在しない場合は作成する。 |
 
 ### `structio.resolve`

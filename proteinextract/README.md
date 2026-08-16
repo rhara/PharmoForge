@@ -10,7 +10,7 @@ pf protein-extract <入力構造ファイル> [--chains=<チェーンID(カン�
 ```
 
 ```bash
-pf protein-extract data/cdk2/2CCH.cif --chains=A,G,H,I,J --remove-water --output data/cdk2/2CCH_main.cif
+pf protein-extract data/cdk2/2CCH.cif --chains=A --remove-water --output data/cdk2/2CCH_main.cif
 pf protein-extract data/tyk2/6NZP.cif --remove-water --output data/tyk2/6NZP_nowater.pdb
 ```
 
@@ -20,11 +20,12 @@ pf protein-extract data/tyk2/6NZP.cif --remove-water --output data/tyk2/6NZP_now
   PDB↔CIF間の変換にも使える。
 - 指定したチェーン・条件で1原子も選択されない場合は`ValueError`。
 
-CIFファイルのチェーンIDは[`label_asym_id`](https://mmcif.wwpdb.org/)基準([ProDy](http://prody.csb.pitt.edu/)の
-既定挙動)で、必ずしも古典的なPDBの1文字チェーンID(`auth_asym_id`)と一致しない
-(例: 1つの著者チェーンが複数の`label_asym_id`に分かれることがある)。`--chains`にはPyMOL等の
-ビューアで実際に表示される値を指定する。またCIF出力時、ProDyの制約によりチェーンIDが
-入力時と異なるラベルに振り直されることがある(原子の対応関係・座標自体は変化しない)。
+CIFファイルのチェーンIDは[`auth_asym_id`](https://mmcif.wwpdb.org/)(PyMOLやRCSBのWebサイトで
+実際に表示されるチェーンID)を使う([`structio.parse_structure`](../API.md#srcstructio)が
+`unite_chains=True`で読み込む)。ProDyの既定(`label_asym_id`)は同じauthチェーンに属する
+水分子・リガンド等を別チェーンに細分化するため、`--chains`にPyMOL等で見えるIDをそのまま
+指定できるようにするための対応。またCIF出力時、ProDyの制約によりチェーンIDが入力時と異なる
+ラベルに振り直されることがある(原子の対応関係・座標自体は変化しない)。
 
 入力構造は[`pf fetch structure=...`](../fetcher/README.md)(RCSB PDB)の出力等をそのまま使える。
 

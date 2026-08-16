@@ -10,10 +10,16 @@ _CIF_SUFFIXES = {".cif", ".mmcif"}
 
 
 def parse_structure(path: Path) -> Atomic:
-    """PDB/CIF形式の構造ファイルを拡張子で自動判別して読み込む。"""
+    """PDB/CIF形式の構造ファイルを拡張子で自動判別して読み込む。
+
+    CIF形式は`unite_chains=True`で読み込み、チェーンIDに`auth_asym_id`
+    (PyMOLやRCSBのWebサイト等で見えるチェーンID)を使う。ProDyの既定
+    (`label_asym_id`)は同じauthチェーンに属する水分子・リガンド等を別チェーンとして
+    細分化するため、PDB形式(auth相当のIDのみを持つ)との一貫性のためにも統一する。
+    """
     path = Path(path)
     if path.suffix.lower() in _CIF_SUFFIXES:
-        return parseMMCIF(str(path))
+        return parseMMCIF(str(path), unite_chains=True)
     return parsePDB(str(path))
 
 
