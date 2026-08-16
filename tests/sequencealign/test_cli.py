@@ -69,3 +69,15 @@ def test_sequence_align_writes_output_file(tmp_path):
 def test_sequence_align_requires_at_least_one_path():
     result = CliRunner().invoke(sequence_align_cmd, [])
     assert result.exit_code != 0
+
+
+def test_sequence_align_width_option_controls_wrap_length(tmp_path):
+    p1 = tmp_path / "a.pdb"
+    _write_pdb(p1, ["GLY"] * 25)
+
+    result = CliRunner().invoke(sequence_align_cmd, [str(p1), "--width", "10"])
+
+    assert result.exit_code == 0, result.output
+    assert "-- 1-10 --" in result.output
+    assert "-- 11-20 --" in result.output
+    assert "-- 21-25 --" in result.output

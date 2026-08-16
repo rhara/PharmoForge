@@ -89,6 +89,37 @@
   (`structfit`/`align-view --method number`と同じ既存の前提を踏襲するのみで、新たな検証ロジックは
   追加していない)。
 
+### ルーラー(位置番号目盛り)の追加と桁欠け不具合の修正
+
+ユーザーからの追加要望: 「120 / | のように各ブロックごとに位置番号の目盛りを表示してほしい」。
+`_format_ruler()`を追加し、各ブロックの直上に10残基ごとの位置番号(数字の行)と`|`(目盛り行)の
+2行を表示するようにした。
+
+実装当初、ブロック左端に近い目盛り(例: ブロックがresnum=449から始まる場合、最初の10の倍数である
+450の目盛り)では、3桁の数字("450")のうち先頭の桁がブロック範囲外(負のインデックス)にあたる
+ため描画時に捨てられ、**末尾の'0'だけが見える**(実際の値が誤って読める)不具合があった。
+ユーザーから「各ブロックの一番左の値が常に0に見える」という指摘を受けて発見・修正。
+数字全体がブロック内に収まらない目盛りは、誤読を防ぐため目盛りごと(数字・`|`とも)省略する
+方針にした(次の10の倍数、この例では460から正しく表示される)。回帰テストを
+`tests/sequencealign/test_report.py`の`test_format_ruler_omits_tick_that_would_be_truncated_at_left_edge`
+に追加。
+
+### `--width`オプション
+
+ユーザー要望: 「桁は100をデフォルトとして`--width 160`のように指定できると嬉しい」。
+`format_alignment_block()`/`build_report()`に`width`/`align_width`引数を追加し、
+`pf sequence-align --width <残基数>`(既定`DEFAULT_ALIGN_WIDTH=100`)で折り返し幅を指定できる
+ようにした。
+
+## コマンド出力の英語化
+
+ユーザー要望: 「出力はすべて英語でお願いします」→ 範囲を確認したところ「pf sequence-alignの
+レポート出力のみ」。続けて「--helpも含めてすべて英語にしてください」と追加指示があったため、
+`src/sequencealign/report.py`が生成するレポート本文(セクション見出し・「no substitutions」
+「gaps:」等)と`src/sequencealign/cli.py`の`--help`テキスト(docstring・各オプションのhelp文字列)を
+すべて英語にした。README/PROMPT.md等のドキュメント、および他コマンド(`align-view`等)は
+PharmoForgeの既存方針通り日本語のまま変更していない。
+
 ## `--reference`オプションの仕様
 
 `--reference`は2通りの指定方法をサポートする(ユーザーからの追加要望により、後日拡張):
@@ -111,22 +142,26 @@
 ## CLI仕様
 
 ```
-pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference <基準>] [--output <出力ファイル>]
+pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference <基準>] [--width <残基数>] [--output <出力ファイル>]
 ```
 
 - 構造ファイルの指定は`align-view`と同じトークン解決(`--indir`、拡張子省略時の自動補完)を
   共有する(下記「`--indir`解決ロジックの共通化」参照)。
 - `--reference`省略時は置換一覧セクションを出力しない。
+- `--width`(既定`DEFAULT_ALIGN_WIDTH=100`)は整列表示セクションの折り返し残基数。
 - `--output`/`-o`省略時は標準出力にレポートを出す。
 
 ### 出力レポートの構成(`src/sequencealign/report.py`)
 
-1. `== 配列(FASTA、観測された残基のみ) ==`: 各構造・各蛋白チェーンの配列
+レポート本文はすべて英語(下記「コマンド出力の英語化」参照)。
+
+1. `== Sequences (FASTA, observed residues only) ==`: 各構造・各蛋白チェーンの配列
    (`seqextract.get_chain_sequences()`、CA原子ベース)。
 2. `== Pairwise identity ==`: 全構造の組み合わせについて`structcompare.match_chains()`の結果を一覧化。
-3. `== 基準配列に対する置換 ==`(`--reference`指定時のみ): 上記の判定に応じて
+3. `== Alignment (by residue number) ==`: 残基番号ベースの整列表示(上記「整列表示」参照)。
+4. `== Substitutions relative to reference ==`(`--reference`指定時のみ): 上記の判定に応じて
    `structcompare.find_substitutions()`または`seqalign.align_to_reference()`を使用。
-   置換一覧の各行に続けて、基準に対する欠損領域(「欠損:」行、上記「欠損領域(ギャップ)の
+   置換一覧の各行に続けて、基準に対する欠損領域(「gaps:」行、上記「欠損領域(ギャップ)の
    可視化」参照)を出力する。
 
 ## `--indir`解決ロジックの共通化
@@ -162,10 +197,11 @@ pytest tests/sequencealign tests/seqextract tests/structcompare tests/seqalign t
 
 ```bash
 pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --reference P24941_AF:A
-# => 1AQ1_ab: 置換なし(...)
-#      欠損: 基準のみ(対象で欠損): 36-43, 149-161
+# => 1AQ1_ab: no substitutions (...)
+#      gaps: reference only (missing in target): 36-43, 149-161
 pf sequence-align --indir data/braf P15056_AF 4MNF_ac --reference P15056_AF:A
-# => 4MNF_ac: 1箇所(seqid=99.6%, overlap=33.6%): V600E
-#      欠損: 基準のみ(対象で欠損): 1-448, 601-615, 721-766
+# => 4MNF_ac: 1 substitution(s) (seqid=99.6%, overlap=33.6%): V600E
+#      gaps: reference only (missing in target): 1-448, 601-615, 721-766
 pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
+pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
 ```

@@ -149,6 +149,18 @@ def test_format_ruler_no_tick_for_short_block():
     assert numbers == " " * 5
 
 
+def test_format_ruler_omits_tick_that_would_be_truncated_at_left_edge():
+    # start_resnum=449: 最初の10の倍数(450)は列1で、"450"の上位桁がブロック外にはみ出す。
+    # 上位桁が欠けて'0'だけが見える(実際の値を誤読させる)くらいなら目盛りごと省略する。
+    numbers, ticks = _format_ruler(449, 100)
+
+    assert "450" not in numbers
+    assert numbers[:9] == " " * 9  # resnum 450(列1)は省略され、次の460(列11)から始まる
+    assert numbers[9:12] == "460"
+    assert ticks[11] == "|"
+    assert ticks[:11] == " " * 11
+
+
 def test_format_alignment_block_includes_ruler(structures_with_gap):
     block = format_alignment_block(structures_with_gap)
 

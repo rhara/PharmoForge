@@ -15,7 +15,7 @@ from structio import parse_structure
 logger = get_logger(__name__)
 
 _FASTA_WIDTH = 60
-_ALIGN_WIDTH = 100
+DEFAULT_ALIGN_WIDTH = 100
 # 標準20種 + 曖昧/非標準コード(Asx/Glx/Xle/Sec/Pyl/不明)。matchChains側のAAMAPと合わせる。
 _SEQUENCE_PATTERN = re.compile(r"^[ACDEFGHIKLMNPQRSTVWYXBZJUO]+$")
 
@@ -75,7 +75,7 @@ def format_identity_matrix(structures: list[LabeledStructure]) -> str:
     return "\n".join(rows) + "\n"
 
 
-def format_alignment_block(structures: list[LabeledStructure], width: int = _ALIGN_WIDTH) -> str:
+def format_alignment_block(structures: list[LabeledStructure], width: int = DEFAULT_ALIGN_WIDTH) -> str:
     """全構造・全蛋白チェーンの配列を、残基番号を共通の軸として横並びに整列表示する
     (`width`残基ごとに折り返す)。
 
@@ -116,7 +116,9 @@ def _format_ruler(start_resnum: int, block_width: int) -> tuple[str, str]:
     """10残基ごとに残基番号とその位置を示す目盛り(2行: 数字の行、`|`の行)を作る。
 
     数字はその残基番号の列で右端が揃うように配置する(例: 残基120の場合、'0'が
-    resnum=120の列に来る)。
+    resnum=120の列に来る)。ブロック左端に近く数字全体が収まらない目盛りは、
+    上位の桁が欠けて末尾の'0'だけが見える(実際の値を誤読させる)ことを防ぐため、
+    その目盛り自体を省略する。
     """
     numbers = [" "] * block_width
     ticks = [" "] * block_width
@@ -124,13 +126,13 @@ def _format_ruler(start_resnum: int, block_width: int) -> tuple[str, str]:
         resnum = start_resnum + col
         if resnum % 10 != 0:
             continue
-        ticks[col] = "|"
         digits = str(resnum)
         start = col - len(digits) + 1
+        if start < 0:
+            continue
+        ticks[col] = "|"
         for i, d in enumerate(digits):
-            pos = start + i
-            if 0 <= pos < block_width:
-                numbers[pos] = d
+            numbers[start + i] = d
     return "".join(numbers), "".join(ticks)
 
 
@@ -285,7 +287,9 @@ def _format_mutation_report_vs_sequence(structures: list[LabeledStructure], refe
     return "\n".join(lines) + "\n"
 
 
-def build_report(structures: list[LabeledStructure], reference: str | None) -> str:
+def build_report(
+    structures: list[LabeledStructure], reference: str | None, align_width: int = DEFAULT_ALIGN_WIDTH
+) -> str:
     """FASTA・pairwise identity・整列表示・(reference指定時)置換一覧をまとめたレポートを組み立てる。"""
     parts = [
         "== Sequences (FASTA, observed residues only) ==",
@@ -293,7 +297,7 @@ def build_report(structures: list[LabeledStructure], reference: str | None) -> s
         "== Pairwise identity ==",
         format_identity_matrix(structures),
         "== Alignment (by residue number) ==",
-        format_alignment_block(structures),
+        format_alignment_block(structures, width=align_width),
     ]
     if reference:
         parts += ["== Substitutions relative to reference ==", format_mutation_report(structures, reference)]

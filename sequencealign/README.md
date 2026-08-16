@@ -8,7 +8,7 @@
 ## 使い方
 
 ```bash
-pf sequence-align <構造ファイル1> <構造ファイル2> [...] [--reference <基準>] [--output <出力ファイル>]
+pf sequence-align <構造ファイル1> <構造ファイル2> [...] [--reference <基準>] [--width <残基数>] [--output <出力ファイル>]
 ```
 
 ```bash
@@ -16,13 +16,17 @@ pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
 pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --reference P24941_AF:A
 pf sequence-align data/braf/P15056_AF.cif data/braf/3OG7_ac.cif --reference P15056_AF:A -o report.txt
 pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
+pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
 ```
+
+コマンドの出力(レポート本文・`--help`)はすべて英語。README・PROMPT等のドキュメントは日本語。
 
 - 構造ファイルはファイル名(拡張子抜き)をラベルとして扱う(FASTAヘッダ・identity表・置換一覧で
   `<ラベル>:<チェーンID>`として参照する)。
 - `--indir DIR`: `align-view`と同じ引数体系。繰り返し指定可能で、以降のファイル名(拡張子省略可、
   `.cif`優先、次に`.pdb`)を`DIR`配下から解決する。`/`を含む指定(または絶対パス)は`--indir`に
   よらずカレントディレクトリ相対 or 絶対パスとして扱う。
+- `--width`(既定`100`): 整列表示セクションの折り返し残基数。
 - `--output` / `-o`: レポートの保存先(省略時は標準出力)。
 - `--reference`: 指定すると残基置換一覧を出力する(省略時は出力しない)。2通りの指定方法:
   - `ラベル:チェーンID`(例: `P24941_AF:A`): 読み込んだ構造の1チェーンを基準にする。
@@ -43,7 +47,9 @@ pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
 2. **Pairwise identity**: 全構造の組み合わせについて、チェーン単位の%identity/%overlapを一覧化
    ([`structcompare`](../API.md#srcstructcompare)、`matchChains`)。
 3. **整列表示(残基番号ベース)**: 全構造・全蛋白チェーンの配列を、残基番号を共通の軸として
-   縦に並べて表示する(100残基/行で折り返し)。配列アラインメントは行わず、構造間でPDBの残基番号が
+   縦に並べて表示する(`--width`残基/行、既定100で折り返し)。各ブロックの直上に10残基ごとの
+   位置番号+`|`の目盛り(ルーラー)を表示する(ブロック左端に近く数字全体が収まらない目盛りは、
+   実際の値を誤読させないよう省略する)。配列アラインメントは行わず、構造間でPDBの残基番号が
    揃っている前提で並べる(`pf align-view --method number`と同じ前提)。観測されていない残基は
    `-`で埋める。異なる蛋白の構造を混在させると無意味な結果になるため、通常は同一蛋白の複数構造を
    対象とする。
@@ -87,20 +93,22 @@ BRAF(P15056)のAlphaFoldモデルと結晶構造4MNF/3OG7を比較すると、�
 ```bash
 pf sequence-align --indir data/braf P15056_AF 4MNF_ac 3OG7_ac --reference P15056_AF:A
 # ...
-# == 基準配列に対する置換 ==
-# 基準: P15056_AF:A
-#   4MNF_ac: 1箇所(seqid=99.6%, overlap=33.6%): V600E
-#     欠損: 基準のみ(対象で欠損): 1-448, 601-615, 721-766
-#   3OG7_ac: 14箇所(seqid=94.3%, overlap=32.2%): K522A, I543A, ...
-#     欠損: 基準のみ(対象で欠損): 1-448, 545-547, 597-614, 627-630, 721-766
+# == Substitutions relative to reference ==
+# reference: P15056_AF:A
+#   4MNF_ac: 1 substitution(s) (seqid=99.6%, overlap=33.6%): V600E
+#     gaps: reference only (missing in target): 1-448, 601-615, 721-766
+#   3OG7_ac: 14 substitution(s) (seqid=94.3%, overlap=32.2%): K522A, I543A, ...
+#     gaps: reference only (missing in target): 1-448, 545-547, 597-614, 627-630, 721-766
 ```
 
-CDK2(P24941)のAlphaFoldモデルと結晶構造2件の整列表示(残基番号ベース、100残基/行)の例:
+CDK2(P24941)のAlphaFoldモデルと結晶構造2件の整列表示(残基番号ベース、ルーラー付き)の例:
 
 ```bash
 pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
-# == 整列表示(残基番号ベース) ==
+# == Alignment (by residue number) ==
 # -- 1-100 --
+#                      10        20        30        40        50        60        70        80        90       100
+#                       |         |         |         |         |         |         |         |         |         |
 # P24941_AF:A  MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
 # 1AQ1_ab:A    MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKI--------VPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
 # 1HCL_a:A     MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIR----TEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP

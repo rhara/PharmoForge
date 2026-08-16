@@ -4,7 +4,7 @@ import click
 
 from structio.resolve import resolve_structure_tokens
 
-from .report import build_report, load_labeled_structures
+from .report import DEFAULT_ALIGN_WIDTH, build_report, load_labeled_structures
 
 
 @click.command("sequence-align", context_settings={"ignore_unknown_options": True})
@@ -13,9 +13,17 @@ from .report import build_report, load_labeled_structures
     "--reference",
     default=None,
     help=(
-        "残基置換一覧の基準。'ラベル:チェーンID'(例: P24941_AF:A)で読み込んだ構造の"
-        "1チェーンを指定するか、アミノ酸配列(1文字表記)を直接指定できる。省略時は置換一覧を出力しない。"
+        "Reference for the substitution list: either 'label:chain_id' (e.g. P24941_AF:A) "
+        "identifying a chain from a loaded structure, or an amino acid sequence (one-letter code) "
+        "given directly. Omit to skip the substitution list."
     ),
+)
+@click.option(
+    "--width",
+    type=int,
+    default=DEFAULT_ALIGN_WIDTH,
+    show_default=True,
+    help="Number of residues per line in the residue-number alignment section.",
 )
 @click.option(
     "--output",
@@ -23,41 +31,43 @@ from .report import build_report, load_labeled_structures
     "output_path",
     type=click.Path(path_type=Path),
     default=None,
-    help="レポートの保存先(省略時は標準出力)",
+    help="Path to save the report to (default: print to stdout).",
 )
-def sequence_align_cmd(tokens: tuple[str, ...], reference: str | None, output_path: Path | None):
-    """複数のPDB/CIF構造から蛋白配列を抽出し、FASTA・pairwise identity・
-    (--reference指定時)基準チェーンに対する残基置換一覧を出力する。
+def sequence_align_cmd(tokens: tuple[str, ...], reference: str | None, width: int, output_path: Path | None):
+    """Extract protein sequences from multiple PDB/CIF structures and report FASTA,
+    pairwise identity, a residue-number alignment, and (with --reference) substitutions.
 
-    配列はチェーンごとにCA原子(観測された残基のみ)から抽出するため、電子密度が
-    見えず欠損した残基は含まれない(UniProtの完全配列とは異なりうる)。
+    Sequences are extracted per chain from observed CA atoms only, so residues not
+    resolved in the electron density are excluded (this can differ from the full
+    UniProt sequence).
 
-    --referenceで基準を指定した場合、残基置換一覧を出力する。基準の指定方法は2通り:
-
-    \b
-    - 'ラベル:チェーンID'(例: P24941_AF:A): 読み込んだ構造の1チェーンを基準にする。
-      残基番号ベースの対応付けのみを用いる(同一蛋白の構造間ではPDBの残基番号が
-      揃っている前提。`pf align-view --method number`と同じ前提)。番号体系が
-      異なる構造間では「対応が取れませんでした」と表示される。
-    - アミノ酸配列(1文字表記、コロンを含まない): 構造を伴わない任意配列
-      (UniProt正規配列やユーザー指定の基準配列)を基準にする。この場合は配列
-      アラインメントを用いるため、残基番号が揃っていない構造間でも比較できる。
+    With --reference given, a substitution list is also printed. Two ways to specify it:
 
     \b
-    --indir DIR: 繰り返し指定可能。以降のファイル名(拡張子省略可、.cif優先、
-      次に.pdb)をDIR配下から解決する。"/"を含む指定(または絶対パス)は
-      --indirによらずカレントディレクトリ相対 or 絶対パスとして扱う(align-viewと同様)。
+    - 'label:chain_id' (e.g. P24941_AF:A): use one chain from a loaded structure as the
+      reference. Only residue-number-based correspondence is used (assumes PDB residue
+      numbers line up across structures, same assumption as `pf align-view --method number`).
+      Structures with a different numbering scheme are reported as "no correspondence found".
+    - An amino acid sequence (one-letter code, no colon): use an arbitrary sequence not tied
+      to any structure (e.g. a UniProt canonical sequence) as the reference. This uses a
+      sequence alignment, so it also works across structures whose residue numbers don't align.
 
     \b
-    例:
+    --indir DIR: repeatable. Resolves following filenames (extension optional, .cif
+      tried first, then .pdb) under DIR. A token containing "/" (or an absolute path)
+      is used as-is (relative to cwd or absolute), regardless of --indir (same as align-view).
+
+    \b
+    Examples:
       pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
       pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --reference P24941_AF:A
       pf sequence-align data/braf/P15056_AF.cif data/braf/3OG7_ac.cif --reference P15056_AF:A -o report.txt
       pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
+      pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
     """
     structure_paths = resolve_structure_tokens(tokens)
     structures = load_labeled_structures(structure_paths)
-    report = build_report(structures, reference)
+    report = build_report(structures, reference, align_width=width)
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(report)
