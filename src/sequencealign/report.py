@@ -15,6 +15,7 @@ from structio import parse_structure
 logger = get_logger(__name__)
 
 _FASTA_WIDTH = 60
+_ALIGN_WIDTH = 100
 # 標準20種 + 曖昧/非標準コード(Asx/Glx/Xle/Sec/Pyl/不明)。matchChains側のAAMAPと合わせる。
 _SEQUENCE_PATTERN = re.compile(r"^[ACDEFGHIKLMNPQRSTVWYXBZJUO]+$")
 
@@ -52,7 +53,7 @@ def format_fasta(structures: list[LabeledStructure]) -> str:
             lines.append(f">{s.label}:{c.chain_id} length={c.length} range={c.resnums[0]}-{c.resnums[-1]}")
             lines.append(_wrap(c.sequence))
     if not lines:
-        return "(蛋白チェーンが見つかりませんでした)\n"
+        return "(no protein chains found)\n"
     return "\n".join(lines) + "\n"
 
 
@@ -70,8 +71,67 @@ def format_identity_matrix(structures: list[LabeledStructure]) -> str:
                     f"  identity={m.seqid:5.1f}%  overlap={m.overlap:5.1f}%  (n={m.n_matched})"
                 )
     if not rows:
-        return "(比較可能なチェーンの組がありませんでした)\n"
+        return "(no comparable chain pairs found)\n"
     return "\n".join(rows) + "\n"
+
+
+def format_alignment_block(structures: list[LabeledStructure], width: int = _ALIGN_WIDTH) -> str:
+    """全構造・全蛋白チェーンの配列を、残基番号を共通の軸として横並びに整列表示する
+    (`width`残基ごとに折り返す)。
+
+    配列アラインメントは行わず、残基番号が一致する列に同じアミノ酸が並ぶ前提で
+    並べる(構造間でPDBの残基番号が揃っている前提。`pf align-view --method number`
+    と同じ前提)。観測されていない残基は`-`で埋める。異なる蛋白の構造を混在させると
+    無意味な結果になる点に注意(通常は同一蛋白の複数構造を対象とする)。
+    """
+    entries = [(f"{s.label}:{c.chain_id}", c) for s in structures for c in s.chains]
+    if not entries:
+        return "(no protein chains found)\n"
+
+    all_resnums = {r for _, c in entries for r in c.resnums}
+    min_resnum, max_resnum = min(all_resnums), max(all_resnums)
+    label_width = max(len(label) for label, _ in entries)
+
+    rows = []
+    for label, c in entries:
+        seq_by_resnum = dict(zip(c.resnums, c.sequence))
+        padded = "".join(seq_by_resnum.get(r, "-") for r in range(min_resnum, max_resnum + 1))
+        rows.append((label, padded))
+
+    total_length = max_resnum - min_resnum + 1
+    blocks = []
+    for block_start in range(0, total_length, width):
+        block_end = min(block_start + width, total_length)
+        block_first_resnum = min_resnum + block_start
+        header = f"-- {block_first_resnum}-{min_resnum + block_end - 1} --"
+        number_line, tick_line = _format_ruler(block_first_resnum, block_end - block_start)
+        indent = " " * (label_width + 2)
+        block_lines = [header, indent + number_line, indent + tick_line]
+        block_lines += [f"{label.ljust(label_width)}  {seq[block_start:block_end]}" for label, seq in rows]
+        blocks.append("\n".join(block_lines))
+    return "\n\n".join(blocks) + "\n"
+
+
+def _format_ruler(start_resnum: int, block_width: int) -> tuple[str, str]:
+    """10残基ごとに残基番号とその位置を示す目盛り(2行: 数字の行、`|`の行)を作る。
+
+    数字はその残基番号の列で右端が揃うように配置する(例: 残基120の場合、'0'が
+    resnum=120の列に来る)。
+    """
+    numbers = [" "] * block_width
+    ticks = [" "] * block_width
+    for col in range(block_width):
+        resnum = start_resnum + col
+        if resnum % 10 != 0:
+            continue
+        ticks[col] = "|"
+        digits = str(resnum)
+        start = col - len(digits) + 1
+        for i, d in enumerate(digits):
+            pos = start + i
+            if 0 <= pos < block_width:
+                numbers[pos] = d
+    return "".join(numbers), "".join(ticks)
 
 
 def _one_letter(resname: str) -> str:
@@ -82,7 +142,7 @@ def _find_structure(structures: list[LabeledStructure], label: str) -> LabeledSt
     for s in structures:
         if s.label == label:
             return s
-    raise ValueError(f"構造が見つかりません: {label!r}(--indirで解決したラベル一覧: {[s.label for s in structures]})")
+    raise ValueError(f"structure not found: {label!r} (labels resolved via --indir: {[s.label for s in structures]})")
 
 
 def _find_chain(structure: LabeledStructure, chain_id: str) -> ChainSequence | None:
@@ -126,9 +186,9 @@ def _format_gap_note(ref_chain: ChainSequence | None, other_chain: ChainSequence
     extra_in_other = other_set - ref_set
     notes = []
     if missing_in_other:
-        notes.append(f"基準のみ(対象で欠損): {_format_resnum_ranges(missing_in_other)}")
+        notes.append(f"reference only (missing in target): {_format_resnum_ranges(missing_in_other)}")
     if extra_in_other:
-        notes.append(f"対象のみ(基準にない): {_format_resnum_ranges(extra_in_other)}")
+        notes.append(f"target only (absent in reference): {_format_resnum_ranges(extra_in_other)}")
     if not notes:
         return None
     return "; ".join(notes)
@@ -156,31 +216,31 @@ def _format_mutation_report_vs_structure(structures: list[LabeledStructure], ref
     ref_structure = _find_structure(structures, ref_label)
     ref_atoms = ref_structure.atoms.select(f"protein and chain {ref_chain_id}")
     if ref_atoms is None:
-        raise ValueError(f"チェーンが見つかりません: {reference!r}")
+        raise ValueError(f"chain not found: {reference!r}")
     ref_chain = _find_chain(ref_structure, ref_chain_id)
 
-    lines = [f"基準: {reference}"]
+    lines = [f"reference: {reference}"]
     for s in structures:
         if s.label == ref_label:
             continue
         report = find_substitutions(ref_atoms, s.atoms)
         if not report.matched:
-            lines.append(f"  {s.label}: 残基番号ベースでの対応が取れませんでした(番号体系が異なる可能性)")
+            lines.append(f"  {s.label}: no residue-number-based correspondence found (numbering scheme may differ)")
             continue
         if not report.substitutions:
-            lines.append(f"  {s.label}: 置換なし(seqid={report.seqid:.1f}%, overlap={report.overlap:.1f}%)")
+            lines.append(f"  {s.label}: no substitutions (seqid={report.seqid:.1f}%, overlap={report.overlap:.1f}%)")
         else:
             subs_str = ", ".join(
                 f"{_one_letter(sub.resname_a)}{sub.resnum}{_one_letter(sub.resname_b)}"
                 for sub in report.substitutions
             )
             lines.append(
-                f"  {s.label}: {len(report.substitutions)}箇所"
-                f"(seqid={report.seqid:.1f}%, overlap={report.overlap:.1f}%): {subs_str}"
+                f"  {s.label}: {len(report.substitutions)} substitution(s)"
+                f" (seqid={report.seqid:.1f}%, overlap={report.overlap:.1f}%): {subs_str}"
             )
         gap_note = _format_gap_note(ref_chain, _find_chain(s, report.chain_id_b))
         if gap_note:
-            lines.append(f"    欠損: {gap_note}")
+            lines.append(f"    gaps: {gap_note}")
     return "\n".join(lines) + "\n"
 
 
@@ -188,49 +248,53 @@ def _format_mutation_report_vs_sequence(structures: list[LabeledStructure], refe
     ref_sequence = reference.upper()
     if not _SEQUENCE_PATTERN.match(ref_sequence):
         raise ValueError(
-            "--referenceは 'ラベル:チェーンID' 形式(例: P24941_AF:A)、"
-            f"またはアミノ酸配列(1文字表記)を指定してください: {reference!r}"
+            "--reference must be either 'label:chain_id' (e.g. P24941_AF:A) "
+            f"or an amino acid sequence (one-letter code): {reference!r}"
         )
 
-    lines = [f"基準配列: {len(ref_sequence)}残基"]
+    lines = [f"reference sequence: {len(ref_sequence)} residues"]
     for s in structures:
         if not s.chains:
-            lines.append(f"  {s.label}: 蛋白チェーンが見つかりませんでした")
+            lines.append(f"  {s.label}: no protein chains found")
             continue
         for c in s.chains:
             result = align_to_reference(ref_sequence, c.sequence, c.resnums)
             label = f"{s.label}:{c.chain_id}"
             stats = f"identity={result.identity:.1f}%, coverage={result.coverage:.1f}%"
             if not result.substitutions:
-                lines.append(f"  {label}: 置換なし({stats})")
+                lines.append(f"  {label}: no substitutions ({stats})")
             else:
                 # 基準配列内の位置(ref_pos)と構造側の実際の残基番号(query_resnum)は
                 # 一致するとは限らない(基準配列がUniProt正規配列と一致しない場合等)ため、
                 # 両方を明示する。
                 subs_str = ", ".join(
-                    f"{sub.ref_aa}{sub.ref_pos}{sub.query_aa}(構造残基番号={sub.query_resnum})"
+                    f"{sub.ref_aa}{sub.ref_pos}{sub.query_aa}(structure resnum={sub.query_resnum})"
                     for sub in result.substitutions
                 )
-                lines.append(f"  {label}: {len(result.substitutions)}箇所({stats}): {subs_str}")
+                lines.append(f"  {label}: {len(result.substitutions)} substitution(s) ({stats}): {subs_str}")
             deletions = [g for g in result.gaps if g.kind == "deletion"]
             if deletions:
-                del_str = ", ".join(f"基準{_format_range(g.ref_start, g.ref_end)}({g.length}残基)" for g in deletions)
-                lines.append(f"    欠損: {del_str}")
+                del_str = ", ".join(
+                    f"ref {_format_range(g.ref_start, g.ref_end)} ({g.length} residue(s))" for g in deletions
+                )
+                lines.append(f"    gaps: {del_str}")
             insertions = [g for g in result.gaps if g.kind == "insertion"]
             if insertions:
-                ins_str = ", ".join(f"{g.length}残基" for g in insertions)
-                lines.append(f"    基準配列にない領域: {ins_str}")
+                ins_str = ", ".join(f"{g.length} residue(s)" for g in insertions)
+                lines.append(f"    not in reference sequence: {ins_str}")
     return "\n".join(lines) + "\n"
 
 
 def build_report(structures: list[LabeledStructure], reference: str | None) -> str:
-    """FASTA・pairwise identity・(reference指定時)置換一覧をまとめたレポートを組み立てる。"""
+    """FASTA・pairwise identity・整列表示・(reference指定時)置換一覧をまとめたレポートを組み立てる。"""
     parts = [
-        "== 配列(FASTA、観測された残基のみ) ==",
+        "== Sequences (FASTA, observed residues only) ==",
         format_fasta(structures),
         "== Pairwise identity ==",
         format_identity_matrix(structures),
+        "== Alignment (by residue number) ==",
+        format_alignment_block(structures),
     ]
     if reference:
-        parts += ["== 基準配列に対する置換 ==", format_mutation_report(structures, reference)]
+        parts += ["== Substitutions relative to reference ==", format_mutation_report(structures, reference)]
     return "\n".join(parts)

@@ -1,8 +1,9 @@
 # sequencealign
 
 複数のPDB/CIF構造から蛋白チェーンの配列を抽出し、FASTA出力・pairwise配列同一性(%identity)・
-基準配列に対する残基置換(変異)一覧を出力する機能。ダウンロードした複数の構造(結晶構造・AlphaFold
-予測構造)間で、配列が本当に同一か、どこに変異・構築上の違いがあるかを素早く確認するためのもの。
+残基番号ベースの整列表示・基準配列に対する残基置換(変異)一覧を出力する機能。ダウンロードした
+複数の構造(結晶構造・AlphaFold予測構造)間で、配列が本当に同一か、どこに変異・構築上の違いが
+あるかを素早く確認するためのもの。
 
 ## 使い方
 
@@ -34,14 +35,19 @@ pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
 
 ### 出力
 
-3つのセクションからなるテキストレポートを出力する。
+4つのセクションからなるテキストレポートを出力する。
 
 1. **配列(FASTA)**: 各構造・各蛋白チェーンの配列(観測されたCA原子のみ、電子密度が見えず欠損した
    残基は含まれない。UniProtの完全配列とは異なりうる)。ヘッダは`><ラベル>:<チェーンID>
    length=<配列長> range=<開始残基番号>-<終了残基番号>`。
 2. **Pairwise identity**: 全構造の組み合わせについて、チェーン単位の%identity/%overlapを一覧化
    ([`structcompare`](../API.md#srcstructcompare)、`matchChains`)。
-3. **基準配列に対する置換**(`--reference`指定時のみ): 基準に対する各構造の残基置換
+3. **整列表示(残基番号ベース)**: 全構造・全蛋白チェーンの配列を、残基番号を共通の軸として
+   縦に並べて表示する(100残基/行で折り返し)。配列アラインメントは行わず、構造間でPDBの残基番号が
+   揃っている前提で並べる(`pf align-view --method number`と同じ前提)。観測されていない残基は
+   `-`で埋める。異なる蛋白の構造を混在させると無意味な結果になるため、通常は同一蛋白の複数構造を
+   対象とする。
+4. **基準配列に対する置換**(`--reference`指定時のみ): 基準に対する各構造の残基置換
    (例: `V600E`)一覧。`ラベル:チェーンID`基準の場合は`資源:残基番号:置換後`、配列基準の場合は
    基準配列内の位置と構造側の実際の残基番号を併記する(例: `V600E(構造残基番号=600)`)。
    置換とは別に、基準に対して欠損している(または基準にない)領域を`欠損:`行で示す
@@ -87,4 +93,15 @@ pf sequence-align --indir data/braf P15056_AF 4MNF_ac 3OG7_ac --reference P15056
 #     欠損: 基準のみ(対象で欠損): 1-448, 601-615, 721-766
 #   3OG7_ac: 14箇所(seqid=94.3%, overlap=32.2%): K522A, I543A, ...
 #     欠損: 基準のみ(対象で欠損): 1-448, 545-547, 597-614, 627-630, 721-766
+```
+
+CDK2(P24941)のAlphaFoldモデルと結晶構造2件の整列表示(残基番号ベース、100残基/行)の例:
+
+```bash
+pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
+# == 整列表示(残基番号ベース) ==
+# -- 1-100 --
+# P24941_AF:A  MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
+# 1AQ1_ab:A    MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKI--------VPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
+# 1HCL_a:A     MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIR----TEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIP
 ```

@@ -1,7 +1,9 @@
 import pytest
 
 from sequencealign.report import (
+    _format_ruler,
     build_report,
+    format_alignment_block,
     format_fasta,
     format_identity_matrix,
     format_mutation_report,
@@ -69,19 +71,19 @@ def test_format_identity_matrix_reports_pairwise_identity(two_structures):
 def test_format_mutation_report_vs_structure_reference(two_structures):
     report = format_mutation_report(two_structures, "ref:A")
 
-    assert "基準: ref:A" in report
-    assert "mut: 1箇所" in report
+    assert "reference: ref:A" in report
+    assert "mut: 1 substitution(s)" in report
     assert "A5S" in report
 
 
 def test_format_mutation_report_vs_sequence_reference(two_structures):
     report = format_mutation_report(two_structures, _COMMON_SEQUENCE)
 
-    assert "基準配列: 10残基" in report
-    assert "ref:A: 置換なし" in report
-    assert "mut:A: 1箇所" in report
+    assert "reference sequence: 10 residues" in report
+    assert "ref:A: no substitutions" in report
+    assert "mut:A: 1 substitution(s)" in report
     assert "A5S" in report
-    assert "構造残基番号=5" in report
+    assert "structure resnum=5" in report
 
 
 def test_format_mutation_report_rejects_invalid_sequence(two_structures):
@@ -97,26 +99,92 @@ def test_format_mutation_report_unknown_structure_label_raises(two_structures):
 def test_build_report_includes_all_sections(two_structures):
     report = build_report(two_structures, reference="ref:A")
 
-    assert "== 配列(FASTA、観測された残基のみ) ==" in report
+    assert "== Sequences (FASTA, observed residues only) ==" in report
     assert "== Pairwise identity ==" in report
-    assert "== 基準配列に対する置換 ==" in report
+    assert "== Substitutions relative to reference ==" in report
 
 
 def test_build_report_omits_mutation_section_without_reference(two_structures):
     report = build_report(two_structures, reference=None)
 
-    assert "== 基準配列に対する置換 ==" not in report
+    assert "== Substitutions relative to reference ==" not in report
 
 
 def test_format_mutation_report_vs_structure_shows_gap(structures_with_gap):
     report = format_mutation_report(structures_with_gap, "ref:A")
 
-    assert "gapped: 置換なし" in report
-    assert "欠損: 基準のみ(対象で欠損): 1-5, 10" in report
+    assert "gapped: no substitutions" in report
+    assert "gaps: reference only (missing in target): 1-5, 10" in report
 
 
 def test_format_mutation_report_vs_sequence_shows_gap(structures_with_gap):
     report = format_mutation_report(structures_with_gap, _VARIED_SEQUENCE)
 
-    assert "gapped:A: 置換なし" in report
-    assert "欠損: 基準1-5(5残基), 基準10(1残基)" in report
+    assert "gapped:A: no substitutions" in report
+    assert "gaps: ref 1-5 (5 residue(s)), ref 10 (1 residue(s))" in report
+
+
+def test_format_alignment_block_lines_up_by_resnum(structures_with_gap):
+    block = format_alignment_block(structures_with_gap)
+
+    assert "-- 1-10 --" in block
+    assert "ref:A     MENFQKVEKI" in block
+    assert "gapped:A  -----KVEK-" in block
+
+
+def test_format_ruler_places_number_and_tick_at_multiples_of_ten():
+    numbers, ticks = _format_ruler(101, 100)
+
+    assert numbers[7:10] == "110"  # resnum 110 は列9(0始まり)、末尾の'0'がその列に来る
+    assert ticks[9] == "|"
+    assert numbers[97:100] == "200"  # resnum 200 は列99(0始まり)
+    assert ticks[99] == "|"
+    assert ticks.replace("|", "").strip() == ""
+
+
+def test_format_ruler_no_tick_for_short_block():
+    numbers, ticks = _format_ruler(1, 5)
+
+    assert ticks == " " * 5
+    assert numbers == " " * 5
+
+
+def test_format_alignment_block_includes_ruler(structures_with_gap):
+    block = format_alignment_block(structures_with_gap)
+
+    assert "          10" in block  # 位置10の目盛り(数字行)
+    assert "           |" in block  # 位置10の目盛り(縦棒行)
+
+
+def test_format_alignment_block_wraps_at_given_width():
+    # 25残基を10残基/行で折り返す
+    resnames = ["GLY"] * 25
+    import tempfile
+    from pathlib import Path
+
+    d = Path(tempfile.mkdtemp())
+    path = d / "a.pdb"
+    _write_pdb(path, resnames)
+    structures = load_labeled_structures([path])
+
+    block = format_alignment_block(structures, width=10)
+
+    assert "-- 1-10 --" in block
+    assert "-- 11-20 --" in block
+    assert "-- 21-25 --" in block
+
+
+def test_format_alignment_block_empty_when_no_chains(tmp_path):
+    path = tmp_path / "water.pdb"
+    path.write_text(
+        "HETATM    1  O   HOH A   1       0.000   0.000   0.000  1.00  0.00           O\nEND\n"
+    )
+    structures = load_labeled_structures([path])
+
+    assert format_alignment_block(structures) == "(no protein chains found)\n"
+
+
+def test_build_report_includes_alignment_block(two_structures):
+    report = build_report(two_structures, reference=None)
+
+    assert "== Alignment (by residue number) ==" in report

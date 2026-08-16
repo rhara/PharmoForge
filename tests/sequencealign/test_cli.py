@@ -28,9 +28,9 @@ def test_sequence_align_prints_report_to_stdout(tmp_path):
     result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(p2)])
 
     assert result.exit_code == 0, result.output
-    assert "== 配列(FASTA、観測された残基のみ) ==" in result.output
+    assert "== Sequences (FASTA, observed residues only) ==" in result.output
     assert "== Pairwise identity ==" in result.output
-    assert "== 基準配列に対する置換 ==" not in result.output
+    assert "== Substitutions relative to reference ==" not in result.output
 
 
 def test_sequence_align_with_reference_structure(tmp_path):
@@ -42,7 +42,7 @@ def test_sequence_align_with_reference_structure(tmp_path):
     result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(p2), "--reference", "ref:A"])
 
     assert result.exit_code == 0, result.output
-    assert "== 基準配列に対する置換 ==" in result.output
+    assert "== Substitutions relative to reference ==" in result.output
 
 
 def test_sequence_align_indir_resolves_stems(tmp_path):
@@ -63,7 +63,7 @@ def test_sequence_align_writes_output_file(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert out_path.exists()
-    assert "== 配列(FASTA、観測された残基のみ) ==" in out_path.read_text()
+    assert "== Sequences (FASTA, observed residues only) ==" in out_path.read_text()
 
 
 def test_sequence_align_requires_at_least_one_path():
