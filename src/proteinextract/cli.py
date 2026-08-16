@@ -10,7 +10,7 @@ from .extract import extract_structure
 @click.option(
     "--chains",
     default=None,
-    help="抽出するチェーンIDをカンマ区切りで指定(例: A,G,H,I,J)。省略時は全チェーン。",
+    help="抽出するチェーンID(auth_asym_id。PyMOLやRCSBのWebサイトで見えるID)をカンマ区切りで指定(例: A,B)。省略時は全チェーン。",
 )
 @click.option(
     "--remove-water",
@@ -33,7 +33,7 @@ def protein_extract_cmd(input_path: Path, chains: str | None, remove_water: bool
 
     \b
     例:
-      pf protein-extract data/cdk2/2CCH.cif --chains=A,G,H,I,J --remove-water --output data/cdk2/2CCH_main.cif
+      pf protein-extract data/cdk2/2CCH.cif --chains=A --remove-water --output data/cdk2/2CCH_main.cif
       pf protein-extract data/tyk2/6NZP.cif --remove-water --output data/tyk2/6NZP_nowater.pdb
     """
     chain_list = [c.strip() for c in chains.split(",") if c.strip()] if chains else None

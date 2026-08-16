@@ -113,7 +113,7 @@ UniProtエントリの取得と、創薬(構造生物学・メディシナルケ
 ## `src/structio`
 
 PDB/CIF構造ファイルの読み書き(拡張子で自動判別、[ProDy](http://prody.csb.pitt.edu/)の
-`AtomGroup`を介する)。`structfit`・`proteinextract`が共通で利用する。
+`AtomGroup`を介する)。`structfit`・`proteinextract`・`alignview`・`sequencealign`が共通で利用する。
 
 ### `structio.io`
 

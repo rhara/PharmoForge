@@ -252,6 +252,6 @@ pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
 
 (出力セクション絞り込み前の動作例。BRAF(P15056)のAlphaFoldモデルと結晶構造4MNFを
 `--reference P15056_AF:A`で比較すると既知の発がん性変異V600Eが正しく検出されることを確認した
-記録は、上記「基準配列に対する置換の判定」節、および`structcompare`/`seqalign`の実装記録参照。
-現在のレポート出力には含まれないが、`format_mutation_report()`自体は残っており
-`pytest tests/sequencealign -k mutation_report`で動作確認できる。)
+記録は、上記「`--reference`オプションの仕様」「実データでの検証結果」節参照。現在のレポート出力
+には含まれないが、`format_mutation_report()`自体は残っており
+`pytest tests/sequencealign -k format_mutation_report`で動作確認できる。)

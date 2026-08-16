@@ -13,11 +13,16 @@ pf align-view <構造ファイル1> <構造ファイル2> [<構造ファイル3>
 pf align-view data/tyk2/TYK2_HUMAN_af.cif data/tyk2/6NZP.cif data/tyk2/4OLI.cif data/tyk2/5C03.cif
 pf align-view data/tyk2/TYK2_HUMAN_af.cif data/tyk2/6NZP.cif --method number
 pf align-view data/9csk.cif data/1abc.cif --method cealign
+pf align-view --indir data/cyp P08604_AF 1PQ2_ad 3IBD_abcde 3NXU_abh
+pf align-view --indir data/cyp P08604_AF 1PQ2_ad --indir data/other 9XYZ
 ```
 
 - 1つめの構造ファイルが基準(target)、2つめ以降がそれぞれ基準にアラインされる(mobile)。
 - 構造ファイルが1つだけの場合はアラインは行わず、そのままPyMOLで開く。
 - 各構造はファイル名(拡張子なし)をオブジェクト名としてPyMOLに読み込まれ、見分けやすいよう自動で配色される。
+- `--indir DIR`: 繰り返し指定可能。以降のファイル名(拡張子省略可、`.cif`優先、次に`.pdb`)を
+  `DIR`配下から解決する。`/`を含む指定(または絶対パス)は`--indir`によらずカレントディレクトリ
+  相対 or 絶対パスとして扱う([`structio.resolve`](../API.md#srcstructio)、`sequence-align`と共用)。
 - `--method`(既定`align`): アラインメント手法。同一蛋白の構造間ではPDBの残基番号が(UniProt基準等で)
   揃っている前提のもと、`align`/`number`はいずれも配列アラインメントではなく残基番号の対応付けを利用する。
   - `align`: targetの探索範囲をmobileの残基番号レンジ(`--align-margin`分の余裕を加えた範囲)に
@@ -60,6 +65,8 @@ mamba create -n pymol -c conda-forge pymol-open-source
   `structfit.fit_by_residue_number()`を呼び出し、実際に構造ファイルを読んで剛体変換を計算する。
 - `launch_alignment_view()`がスクリプトを一時ファイルに書き出し、`mamba run -n <env> pymol <script>`で
   PyMOLをGUIモードで起動する(処理はPyMOLウィンドウを閉じるまでブロックする)。実行後、一時ファイルは削除する。
+- `--indir`解決ロジック(拡張子省略時の自動補完等)は[`structio.resolve`](../API.md#srcstructio)を
+  `sequence-align`と共用する。
 
 ## テスト
 

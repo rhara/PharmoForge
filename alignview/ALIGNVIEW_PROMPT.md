@@ -15,6 +15,11 @@ pf align-view <構造ファイル1> <構造ファイル2> [<構造ファイル3>
 
 - 構造ファイルは1つ以上必須。存在しないパスはエラー。
 - 1つめが基準(target)、2つめ以降がそれぞれ基準にアラインされる(mobile)。1つだけの場合はアラインせず開く。
+- `--indir DIR`: 繰り返し指定可能。以降のファイル名(拡張子省略可、`.cif`優先、次に`.pdb`)を
+  `DIR`配下から解決する。`/`を含む指定(または絶対パス)は`--indir`によらずカレントディレクトリ
+  相対 or 絶対パスとして扱う。当初`alignview/cli.py`にのみ実装していたが、後日`sequencealign`でも
+  必要になったタイミングで`src/structio/resolve.py`(`resolve_structure_tokens()`)へ切り出し、
+  両コマンドで共用するようにした(下記「実装ファイル」参照)。
 - `--method`(既定`align`): `align`|`super`|`cealign`|`number`。
 - `--align-margin`(既定`20`、`--method align`時のみ有効): 下記の範囲絞り込みのマージン(残基数)。
 - `--pymol-env`(既定`pymol`): PyMOLがインストールされたconda/mamba環境名。
@@ -50,6 +55,8 @@ pf align-view <構造ファイル1> <構造ファイル2> [<構造ファイル3>
 - `src/alignview/cli.py` — `pf align-view`サブコマンド
 - `src/structfit/fit.py` — 残基番号ベースの剛体重ね合わせ計算(アトミックパッケージ、詳細は
   [API.md](../API.md#srcstructfit))
+- `src/structio/resolve.py` — `--indir`解決ロジック(アトミックパッケージ、`sequencealign`と共用、
+  詳細は[API.md](../API.md#srcstructio))
 
 ## 依存パッケージ・実行環境
 
@@ -132,10 +139,12 @@ pytest tests/alignview tests/structfit
 TYK2のAlphaFold DB予測構造と複数のPDB結晶構造を重ね合わせて表示する:
 
 ```bash
-pf fetch structure=TYK2_HUMAN --af --type=cif --output data/tyk2/TYK2_HUMAN_af.cif
-pf fetch structure=6NZP --output data/tyk2/6NZP.cif
-pf fetch structure=4OLI --output data/tyk2/4OLI.cif
-pf fetch structure=5C03 --output data/tyk2/5C03.cif
-pf align-view data/tyk2/TYK2_HUMAN_af.cif data/tyk2/6NZP.cif data/tyk2/4OLI.cif data/tyk2/5C03.cif
-pf align-view data/tyk2/TYK2_HUMAN_af.cif data/tyk2/6NZP.cif --method number
+pf fetch structure=TYK2_HUMAN --af --type=cif --outdir data/tyk2
+pf fetch structure=6NZP,4OLI,5C03 --type cif --outdir data/tyk2
+pf align-view --indir data/tyk2 P29597_AF 6NZP 4OLI 5C03
+pf align-view --indir data/tyk2 P29597_AF 6NZP --method number
 ```
+
+(`pf fetch`は識別子からファイル名を自動的に決める。この例のTYK2 UniProt accessionは`P29597`
+のため、AlphaFold構造は`data/tyk2/P29597_AF.cif`として保存される。`fetch`/`align-view`の
+CLI仕様が変わった場合はこの動作例も追従が必要。)

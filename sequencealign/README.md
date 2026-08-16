@@ -53,8 +53,10 @@ pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160 -o report.txt
 - `src/seqextract`(配列+残基番号の抽出、ProDy)・`src/structcompare`(構造間の配列比較、ProDyの
   `matchChains`ラッパー)・`src/seqalign`(任意配列同士の比較、Biopython`PairwiseAligner`)という
   3つのアトミックなパッケージを組み合わせて`src/sequencealign/report.py`でレポートを組み立てる
-  (詳細は[API.md](../API.md)参照)。`structcompare`/`seqalign`は現在レポートには使われていないが
-  (下記「出力セクションの絞り込み」参照)、パッケージ自体は残しておりテストもある。
+  (詳細は[API.md](../API.md)参照)。`structcompare.match_chains()`はPairwise identityセクションで
+  引き続き使う。一方`structcompare.find_substitutions()`/`seqalign.align_to_reference()`(置換・
+  欠損検出)は現在レポートからは使われていないが(下記「出力セクションの絞り込み」参照)、
+  関数自体は残しておりテストもある。
 - `--indir`解決ロジックは[`structio.resolve`](../API.md#srcstructio)を`align-view`と共用する。
 
 ### 出力セクションの絞り込み
