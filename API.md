@@ -201,3 +201,32 @@ Biopythonの`Bio.Align.PairwiseAligner`を直接用いる(`structcompare`とは�
 | `SequenceSubstitution` | `ref_pos: int`(基準配列内の位置、1始まり)、`ref_aa: str`、`query_resnum: int`(比較対象側の実際の残基番号)、`query_aa: str`。 |
 | `SequenceGap` | 基準配列に対する欠失(`kind="deletion"`)またはqueryにのみ存在する挿入(`kind="insertion"`)領域。`ref_start`/`ref_end: int \| None`(基準配列内の範囲、insertionの場合None)、`length: int`、`before_query_resnum`/`after_query_resnum: int \| None`(query側でこの領域の直前・直後にある残基番号。配列末端の場合None)。 |
 | `AlignmentResult` | `identity: float`(%、アラインメントされた位置のうち一致した割合)、`coverage: float`(%、`ref_sequence`全体のうちアラインメントされた位置の割合)、`aligned_length: int`、`substitutions: list[SequenceSubstitution]`、`gaps: list[SequenceGap]`、`query_by_ref_pos: dict[int, str]`(基準配列内の位置(1始まり)→対応するquery側のアミノ酸。ギャップの位置は含まない。`sequencealign`が配列アラインメントベースの整列表示・identityグリッド構築に使用)。 |
+
+## `src/pocket`
+
+[fpocket](https://github.com/Discngine/fpocket)(conda-forge、`pharmoforge`環境に別途インストールが
+必要)の実行と出力パース。ポケット検出そのものはfpocketに委譲し、`<stem>_info.txt`(ポケット記述子)・
+`pockets/pocket<N>_atm.pdb`(ポケットに面する原子)の読み取りのみを行う。`pocketfinder`向けに
+アトミックな技術要素として切り出した。構造読み込みは[`structio`](#srcstructio)を利用する。
+
+### `pocket.fpocket`
+
+| 関数 | 説明 |
+| --- | --- |
+| `run_fpocket(structure_path: Path, work_dir: Path) -> list[Pocket]` | `structure_path`(PDB/CIF)を`work_dir`にコピーして`fpocket -f <コピー> -w pdb`を実行し、検出されたポケットをスコア降順で返す。fpocketは入力と同じディレクトリに`<stem>_out/`を書き出すため、`work_dir`にはfpocketの生出力(PyMOL/VMD可視化スクリプト等)がそのまま残る。ポケット周辺残基の抽出には常に`-w pdb`を指定する(fpocket生成のmmCIFは`pdbx_PDB_model_num`列を欠きProDyでパース不可のため)。fpocketが非0で終了した場合は`RuntimeError`。 |
+| `Pocket` | 1ポケット分の情報(dataclass)。`pocket_id: int`、`score: float`、`druggability_score: float`、`n_alpha_spheres: int`、`volume: float`、`total_sasa`/`polar_sasa`/`apolar_sasa: float`、`hydrophobicity_score: float`、`residues: list[PocketResidue]`。 |
+| `PocketResidue` | ポケットに面する残基1件(dataclass)。`chain_id: str`、`resnum: int`(auth番号)、`resname: str`。 |
+
+## `src/pymolrun`
+
+PyMOLスクリプト(`.pml`)を専用conda/mamba環境で起動する。PyMOLは`rdkit>=2026.03.5`要件が共通環境
+`pharmoforge`と競合するため専用環境(既定`pymol`)にインストールする前提(詳細は
+[`alignview/README.md`](alignview/README.md#pymolの実行環境)参照)。当初`alignview`固有だったが
+`pocketfinder`(`pf view-pocket`)でも同じ起動ロジックが必要になったためアトミックな技術要素として
+切り出した。
+
+### `pymolrun.launch`
+
+| 関数 | 説明 |
+| --- | --- |
+| `run_pymol_script(script: str, pymol_env: str = "pymol") -> None` | `script`(PyMOLスクリプト本文)を一時`.pml`ファイルに書き出し、`mamba run -n <pymol_env> pymol <script>`でGUIモードのPyMOLを起動する。処理はPyMOLウィンドウを閉じるまでブロックし、実行後に一時ファイルを削除する。`mamba`/`conda`コマンドが見つからない場合は`RuntimeError`。 |

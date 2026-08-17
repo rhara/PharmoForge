@@ -1,4 +1,3 @@
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -104,31 +103,13 @@ def test_build_pymol_script_single_structure_has_no_align(tmp_path):
     assert "zoom all" in script
 
 
-def test_launch_alignment_view_invokes_mamba_run_pymol(tmp_path):
+def test_launch_alignment_view_builds_script_and_runs_pymol(tmp_path):
     p1 = tmp_path / "ref.pdb"
     p1.write_text("")
 
-    with patch("alignview.view.subprocess.run") as mock_run, \
-            patch("alignview.view.shutil.which", return_value="/usr/bin/mamba"):
-        launch_alignment_view([p1], method="align", pymol_env="pymol")
+    with patch("alignview.view.run_pymol_script") as mock_run:
+        launch_alignment_view([p1], method="align", pymol_env="custom-pymol")
 
     args, kwargs = mock_run.call_args
-    command = args[0]
-    assert command[:4] == ["/usr/bin/mamba", "run", "-n", "pymol"]
-    assert command[4] == "pymol"
-    assert kwargs.get("check") is True
-
-    script_path = Path(command[5])
-    assert not script_path.exists()  # 実行後に一時ファイルが削除されている
-
-
-def test_launch_alignment_view_raises_when_mamba_not_found(tmp_path):
-    p1 = tmp_path / "ref.pdb"
-    p1.write_text("")
-
-    with patch("alignview.view.shutil.which", return_value=None):
-        try:
-            launch_alignment_view([p1])
-            assert False, "RuntimeErrorが発生しなかった"
-        except RuntimeError:
-            pass
+    assert f"load {p1.resolve()}, ref" in args[0]
+    assert kwargs == {"pymol_env": "custom-pymol"}

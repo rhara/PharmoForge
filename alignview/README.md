@@ -63,8 +63,11 @@ mamba create -n pymol -c conda-forge pymol-open-source
 - `src/alignview/view.py`の`build_pymol_script()`で、構造の読み込み・配色・アラインメントを
   行うPyMOLスクリプト(`.pml`)を組み立てる。`--method number`の場合はここで(PyMOL起動前に)
   `structfit.fit_by_residue_number()`を呼び出し、実際に構造ファイルを読んで剛体変換を計算する。
-- `launch_alignment_view()`がスクリプトを一時ファイルに書き出し、`mamba run -n <env> pymol <script>`で
-  PyMOLをGUIモードで起動する(処理はPyMOLウィンドウを閉じるまでブロックする)。実行後、一時ファイルは削除する。
+- `launch_alignment_view()`が組み立てたスクリプトを共通パッケージ[`src/pymolrun`](../src/pymolrun)の
+  `run_pymol_script()`に渡してPyMOLを起動する(一時`.pml`ファイルへの書き出し・
+  `mamba run -n <env> pymol <script>`起動・実行後の削除は`pymolrun`側の責務。元は本機能固有だったが、
+  [`pocketfinder`](../pocketfinder/README.md)(`pf view-pocket`)でも同じ起動ロジックが必要になった
+  ためアトミックな技術要素として切り出した)。
 - `--indir`解決ロジック(拡張子省略時の自動補完等)は[`structio.resolve`](../API.md#srcstructio)を
   `sequence-align`と共用する。
 

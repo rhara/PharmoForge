@@ -1,11 +1,9 @@
 """複数のPDB/CIF構造をPyMOLで開き、先頭の構造に他を重ね合わせて表示する。"""
 
-import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 
 from core.logging_utils import get_logger
+from pymolrun import run_pymol_script
 from structfit import fit_by_residue_number
 
 logger = get_logger(__name__)
@@ -120,27 +118,8 @@ def build_pymol_script(paths: list[Path], method: str, align_margin: int = 20) -
 def launch_alignment_view(
     structure_paths: list[Path], method: str = "align", pymol_env: str = "pymol", align_margin: int = 20
 ) -> None:
-    """指定した構造をPyMOLで開き、先頭の構造に他をアラインして表示する。
-
-    rdkitのバージョン要件の都合でPyMOLは専用のconda/mamba環境(既定`pymol`)に
-    インストールされている前提で、`mamba run -n <env> pymol`経由で起動する。
-    """
+    """指定した構造をPyMOLで開き、先頭の構造に他をアラインして表示する。"""
     paths = [Path(p) for p in structure_paths]
     logger.info("Building PyMOL script for %d structure(s) (method=%s) ...", len(paths), method)
     script = build_pymol_script(paths, method, align_margin=align_margin)
-
-    with tempfile.NamedTemporaryFile("w", suffix=".pml", delete=False) as f:
-        f.write(script)
-        script_path = Path(f.name)
-
-    mamba = shutil.which("mamba") or shutil.which("conda")
-    if mamba is None:
-        raise RuntimeError("mamba/condaコマンドが見つかりません。PATHを確認してください。")
-
-    command = [mamba, "run", "-n", pymol_env, "pymol", str(script_path)]
-    logger.info("Launching PyMOL (env=%s) ...", pymol_env)
-    try:
-        subprocess.run(command, check=True)
-    finally:
-        script_path.unlink(missing_ok=True)
-    logger.info("PyMOL session closed.")
+    run_pymol_script(script, pymol_env=pymol_env)
