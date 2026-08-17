@@ -5,7 +5,9 @@ from sequencealign.report import (
     build_report,
     format_alignment_block,
     format_alignment_block_by_sequence,
+    format_coverage_matrix,
     format_fasta,
+    format_identity_coverage_matrix,
     format_identity_matrix,
     format_mutation_report,
     load_labeled_structures,
@@ -82,8 +84,11 @@ def test_format_fasta_lists_all_chains(two_structures):
 def test_format_identity_matrix_reports_pairwise_identity(two_structures):
     matrix = format_identity_matrix(two_structures)
 
-    assert "ref:A  vs  mut:A" in matrix
-    assert "identity= 90.0%" in matrix
+    lines = matrix.splitlines()
+    assert lines[0].split() == ["ref:A", "mut:A"]  # ヘッダー行(列ラベル)
+    ref_row, mut_row = lines[1].split(), lines[2].split()
+    assert ref_row == ["ref:A", "-", "90.0"]
+    assert mut_row == ["mut:A", "90.0", "-"]  # 対称なグリッド
 
 
 def test_format_mutation_report_vs_structure_reference(two_structures):
@@ -119,7 +124,7 @@ def test_format_mutation_report_unknown_structure_label_raises(two_structures):
 def test_build_report_includes_pairwise_identity_and_alignment_only(two_structures):
     report = build_report(two_structures)
 
-    assert "== Pairwise identity ==" in report
+    assert "== Pairwise identity/coverage ==" in report  # identity_format既定は"combined"
     assert "== Alignment (sequence-aligned) ==" in report  # method既定は"align"
     # FASTA・Substitutionsセクションはユーザー要望により出力しない
     assert "== Sequences" not in report
@@ -255,15 +260,75 @@ def test_load_labeled_structures_reads_multi_record_fasta(tmp_path):
     assert chains[1].sequence == "MENFQKVEKI"
 
 
-def test_format_identity_matrix_skips_fasta_only_pairs(two_structures, tmp_path):
+def test_format_identity_matrix_includes_fasta_only_chains(two_structures, tmp_path):
     fasta_path = tmp_path / "seqonly.fasta"
     fasta_path.write_text(f">seqonly\n{_COMMON_SEQUENCE}\n")
     structures = two_structures + load_labeled_structures([fasta_path])
 
     matrix = format_identity_matrix(structures)
 
-    assert "seqonly" not in matrix
-    assert "ref:A  vs  mut:A" in matrix  # 実構造同士の組は引き続き比較される
+    # atomsを持たないFASTA由来のチェーンも、配列アラインメントベースでグリッドに含まれる。
+    assert "seqonly:A" in matrix
+    lines = matrix.splitlines()
+    assert lines[0].split() == ["ref:A", "mut:A", "seqonly:A"]
+    ref_row = lines[1].split()
+    assert ref_row == ["ref:A", "-", "90.0", "100.0"]  # ref=_COMMON_SEQUENCEに1残基置換したものがmut
+
+
+def test_format_identity_matrix_fewer_than_two_chains(tmp_path):
+    path = tmp_path / "single.fasta"
+    path.write_text(">a\nMENFQKVEKI\n")
+    structures = load_labeled_structures([path])
+
+    assert format_identity_matrix(structures) == "(fewer than two protein chains found)\n"
+
+
+def test_format_coverage_matrix_is_asymmetric(full_length_and_domain_only):
+    # full(20残基)を基準にすると、domain(10残基)はその半分しかカバーしない(50.0%)。
+    # domain(10残基)を基準にすると、full内の対応部分は全て含まれる(100.0%)。
+    matrix = format_coverage_matrix(full_length_and_domain_only)
+
+    lines = matrix.splitlines()
+    assert lines[0].split() == ["full:A", "domain:A"]
+    full_row = lines[1].split()
+    domain_row = lines[2].split()
+    assert full_row == ["full:A", "-", "50.0"]
+    assert domain_row == ["domain:A", "100.0", "-"]
+
+
+def test_format_coverage_matrix_fewer_than_two_chains(tmp_path):
+    path = tmp_path / "single.fasta"
+    path.write_text(">a\nMENFQKVEKI\n")
+    structures = load_labeled_structures([path])
+
+    assert format_coverage_matrix(structures) == "(fewer than two protein chains found)\n"
+
+
+def test_format_identity_coverage_matrix_combines_both_values(full_length_and_domain_only):
+    matrix = format_identity_coverage_matrix(full_length_and_domain_only)
+
+    lines = matrix.splitlines()
+    full_row = lines[1].split()
+    domain_row = lines[2].split()
+    assert full_row == ["full:A", "-", "100.0/50.0"]
+    assert domain_row == ["domain:A", "100.0/100.0", "-"]
+
+
+def test_build_report_identity_format_separate_shows_two_tables(full_length_and_domain_only):
+    report = build_report(full_length_and_domain_only, identity_format="separate")
+
+    assert "== Pairwise identity ==" in report
+    assert "== Coverage ==" in report
+    assert "== Pairwise identity/coverage ==" not in report
+    assert "100.0/50.0" not in report  # combined形式のセル表記は出ない
+
+
+def test_build_report_identity_format_combined_shows_one_table(full_length_and_domain_only):
+    report = build_report(full_length_and_domain_only, identity_format="combined")
+
+    assert "== Pairwise identity/coverage ==" in report
+    assert "== Coverage ==" not in report
+    assert "100.0/50.0" in report
 
 
 def test_format_mutation_report_vs_structure_rejects_fasta_reference(two_structures, tmp_path):

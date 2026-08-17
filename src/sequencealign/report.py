@@ -8,9 +8,9 @@ from pathlib import Path
 from prody.atomic.atomic import AAMAP, Atomic
 
 from core.logging_utils import get_logger
-from seqalign import align_to_reference
+from seqalign import AlignmentResult, align_to_reference
 from seqextract import ChainSequence, get_chain_sequences
-from structcompare import find_substitutions, match_chains
+from structcompare import find_substitutions
 from structio import parse_fasta, parse_structure
 
 logger = get_logger(__name__)
@@ -86,28 +86,106 @@ def format_fasta(structures: list[LabeledStructure]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def format_identity_matrix(structures: list[LabeledStructure]) -> str:
-    """全構造の組み合わせについて、チェーン単位のpairwise identity/overlapを一覧化する。
+def _pairwise_grid_entries(structures: list[LabeledStructure]) -> list[tuple[str, ChainSequence]]:
+    return [(f"{s.label}:{c.chain_id}", c) for s in structures for c in s.chains]
 
-    `atoms`を持たない構造(FASTAから読み込んだもの)が絡む組み合わせは、比較に
-    3次元構造を要するため対象から除外する。
+
+def _pairwise_alignment_grid(
+    structures: list[LabeledStructure],
+) -> tuple[list[str], list[list[AlignmentResult | None]]]:
+    """全チェーンの組み合わせ(順序あり、対角除く)についてペアワイズグローバルアラインメント
+    (`seqalign.align_to_reference`)を計算する。`grid[i][j]`は行iを基準配列(ref)、列jを
+    比較対象(query)とした`AlignmentResult`(対角は`None`)。identityはほぼ対称だが、
+    coverageは基準側の長さに対する割合のため方向で値が異なるため、両方向を計算する。
     """
-    rows = []
-    for i in range(len(structures)):
-        for j in range(i + 1, len(structures)):
-            sa, sb = structures[i], structures[j]
-            if not sa.chains or not sb.chains:
+    entries = _pairwise_grid_entries(structures)
+    labels = [label for label, _ in entries]
+    n = len(labels)
+    grid: list[list[AlignmentResult | None]] = [[None] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i == j:
                 continue
-            if sa.atoms is None or sb.atoms is None:
-                continue
-            for m in match_chains(sa.atoms, sb.atoms):
-                rows.append(
-                    f"{sa.label}:{m.chain_id_a}  vs  {sb.label}:{m.chain_id_b}"
-                    f"  identity={m.seqid:5.1f}%  overlap={m.overlap:5.1f}%  (n={m.n_matched})"
-                )
-    if not rows:
-        return "(no comparable chain pairs found)\n"
-    return "\n".join(rows) + "\n"
+            ref_chain, query_chain = entries[i][1], entries[j][1]
+            grid[i][j] = align_to_reference(ref_chain.sequence, query_chain.sequence, query_chain.resnums)
+    return labels, grid
+
+
+def _render_grid_table(labels: list[str], cells: list[list[str]]) -> str:
+    """`labels`を行・列ラベルとするN×Nのグリッド表を整形する(`cells[i][j]`は行i・列jの値)。"""
+    row_label_width = max(len(label) for label in labels)
+    col_width = max([row_label_width] + [len(v) for row in cells for v in row])
+
+    header = " " * (row_label_width + 2) + "".join(label.rjust(col_width + 1) for label in labels)
+    lines = [header]
+    for i, label in enumerate(labels):
+        row_cells = "".join(cells[i][j].rjust(col_width + 1) for j in range(len(labels)))
+        lines.append(f"{label.ljust(row_label_width)}  {row_cells}")
+    return "\n".join(lines) + "\n"
+
+
+def format_identity_matrix(structures: list[LabeledStructure]) -> str:
+    """全チェーンの組み合わせについて、%identityをN×Nのグリッド表として一覧化する
+    (対角は自身との比較のため`-`)。
+
+    構造(`atoms`)の有無によらず、全チェーンの配列同士をペアワイズグローバルアラインメント
+    (`seqalign.align_to_reference`)し、アラインメントされた位置における%identityをセルの
+    値とする。同一構造内の複数チェーン同士の組(例: ホモ二量体のチェーンA/C)も、FASTA由来の
+    チェーン(atoms無し)を含む組も対象にする。identityは基準・対象どちらを基準にしても
+    ほぼ同じ値になるため、対角より上のセルのみ計算し下は複製する(`format_coverage_matrix`とは
+    異なり非対称ではない)。
+    """
+    entries = _pairwise_grid_entries(structures)
+    if len(entries) < 2:
+        return "(fewer than two protein chains found)\n"
+
+    labels = [label for label, _ in entries]
+    n = len(labels)
+    cells = [["-"] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            result = align_to_reference(entries[i][1].sequence, entries[j][1].sequence, entries[j][1].resnums)
+            value = f"{result.identity:.1f}"
+            cells[i][j] = value
+            cells[j][i] = value
+    return _render_grid_table(labels, cells)
+
+
+def format_coverage_matrix(structures: list[LabeledStructure]) -> str:
+    """全チェーンの組み合わせについて、%coverage(アラインメントされた割合)をN×Nの
+    グリッド表として一覧化する(対角は自身との比較のため`-`)。
+
+    セル`(行, 列)`は「行のチェーンを基準配列としたとき、アラインメントで列のチェーンと
+    対応した割合」を表す(基準配列の長さが分母のため、行と列を入れ替えると値が変わる
+    非対称な表。例: 短いドメインのみの構造を基準にすると高coverage、全長配列を基準にすると
+    そのドメインの分しかカバーされないため低coverageになる)。
+    """
+    labels, grid = _pairwise_alignment_grid(structures)
+    if len(labels) < 2:
+        return "(fewer than two protein chains found)\n"
+
+    n = len(labels)
+    cells = [[grid[i][j].coverage if grid[i][j] else None for j in range(n)] for i in range(n)]
+    formatted = [[f"{v:.1f}" if v is not None else "-" for v in row] for row in cells]
+    return _render_grid_table(labels, formatted)
+
+
+def format_identity_coverage_matrix(structures: list[LabeledStructure]) -> str:
+    """全チェーンの組み合わせについて、`identity/coverage`をN×Nのグリッド表として
+    一覧化する(対角は自身との比較のため`-`)。`format_identity_matrix`と
+    `format_coverage_matrix`を1つの表に統合した形式(coverageの非対称性については
+    `format_coverage_matrix`のdocstring参照)。
+    """
+    labels, grid = _pairwise_alignment_grid(structures)
+    if len(labels) < 2:
+        return "(fewer than two protein chains found)\n"
+
+    n = len(labels)
+    cells = [
+        [f"{grid[i][j].identity:.1f}/{grid[i][j].coverage:.1f}" if grid[i][j] else "-" for j in range(n)]
+        for i in range(n)
+    ]
+    return _render_grid_table(labels, cells)
 
 
 def format_alignment_block(structures: list[LabeledStructure], width: int = DEFAULT_ALIGN_WIDTH) -> str:
@@ -378,7 +456,10 @@ def _format_mutation_report_vs_sequence(structures: list[LabeledStructure], refe
 
 
 def build_report(
-    structures: list[LabeledStructure], align_width: int = DEFAULT_ALIGN_WIDTH, method: str = "align"
+    structures: list[LabeledStructure],
+    align_width: int = DEFAULT_ALIGN_WIDTH,
+    method: str = "align",
+    identity_format: str = "combined",
 ) -> str:
     """Pairwise identity・整列表示をまとめたレポートを組み立てる。
 
@@ -387,17 +468,30 @@ def build_report(
     揃っていない構造の組み合わせでも正しく並ぶ。`number`は残基番号ベース
     (`format_alignment_block`)で、構造間でPDBの残基番号が既に揃っている(同じUniProt番号体系
     等)ことが分かっている場合にのみ使う。
+
+    `identity_format`(`combined`/`separate`)はPairwise identityセクションの表示形式を選ぶ。
+    `combined`(既定)はidentity/coverageを1つの表(セルは`identity/coverage`)にまとめる。
+    `separate`はidentity表・coverage表を別々のセクションとして出力する
+    (どちらの形式にするか、実際の出力を見て決めたいというユーザーの要望により両方実装した)。
     """
     if method == "number":
-        heading = "== Alignment (by residue number) =="
+        alignment_heading = "== Alignment (by residue number) =="
         alignment = format_alignment_block(structures, width=align_width)
     else:
-        heading = "== Alignment (sequence-aligned) =="
+        alignment_heading = "== Alignment (sequence-aligned) =="
         alignment = format_alignment_block_by_sequence(structures, width=align_width)
-    parts = [
-        "== Pairwise identity ==",
-        format_identity_matrix(structures),
-        heading,
-        alignment,
-    ]
+
+    if identity_format == "separate":
+        parts = [
+            "== Pairwise identity ==",
+            format_identity_matrix(structures),
+            "== Coverage ==",
+            format_coverage_matrix(structures),
+        ]
+    else:
+        parts = [
+            "== Pairwise identity/coverage ==",
+            format_identity_coverage_matrix(structures),
+        ]
+    parts += [alignment_heading, alignment]
     return "\n".join(parts)

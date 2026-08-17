@@ -261,6 +261,77 @@ FASTA形式も入力に対応してほしい。拡張子がない場合は優先
 `--indir`解決の優先順位はユーザー指定通り`.cif` → `.pdb` → `.fasta`(既存の`.mmcif`は`.cif`と`.pdb`の
 間に維持、実質的に「`.cif`系を最優先、次に`.pdb`、最後に配列のみの`.fasta`」という意図を保つ)。
 
+## 残基番号ベース整列の限界の発見と`--method align`の追加・既定化
+
+FASTA入力対応の直後、ユーザーから「`pf sequence-align`が相同性でアラインしていないようだ。
+シーケンス番号だけで整列していないか」との指摘を受けた。実際にSARS-CoV-2のreplicase
+polyprotein 1ab全長(P0DTD1、UniProt由来、残基1-7096)とMproドメインのみの結晶構造(6LU7、
+チェーンAはローカル採番1-306)を実データで確認したところ、6LU7のローカル採番1-306が
+P0DTD1の1-306(Mproとは無関係な別領域)にそのまま重なってしまい、無意味な整列になっていた
+(6LU7の実際のMpro領域はP0DTD1の残基3264付近)。
+
+これを受け、`seqalign.align_to_reference()`(既存の`format_mutation_report`で使っていたものと
+同じ、Biopython `PairwiseAligner`によるグローバルアラインメント)を使った配列アラインメント
+ベースの整列表示`format_alignment_block_by_sequence()`を追加した。
+
+- 基準は`align-view --method align`と同じ考え方で、先頭の入力の先頭チェーンとする。他の全チェーンを
+  この基準配列に対して個別にペアワイズアラインメントし(複数配列同時アラインメント=MSAではない)、
+  基準配列内の位置(ref_pos)を軸として並べる。
+- `seqalign.pairwise.AlignmentResult`に`query_by_ref_pos: dict[int, str]`
+  (基準配列内の位置→対応するquery側アミノ酸)を追加し、整列表示の構築に必要な「軸上の各位置に
+  何のアミノ酸が来るか」を`align_to_reference()`の呼び出し1回で取得できるようにした
+  (従来は`substitutions`/`gaps`から間接的にしか復元できなかった)。
+- `pf sequence-align --method`(`number`/`align`)を新設。残基番号ベースの既存実装は
+  `format_alignment_block()`のまま残し、`--method number`で明示指定した場合のみ使う。
+- 実データで動作確認: `pf sequence-align --indir . P0DTD1 6LU7 --method align`で、6LU7のMpro配列が
+  P0DTD1の残基3264付近から正しく整列されることを確認(既知の生物学的位置と一致)。
+
+その後さらにユーザーから「`--method`の既定は`align`にしてほしい」との要望を受け、既定値を
+`number`から`align`に変更した(`sequence_align_cmd`の`click.option`、`build_report()`双方)。
+既存の「残基番号が構造間で揃っている」ことが分かっている場合の高速・単純な経路として`number`は
+残すが、番号体系の不一致による誤整列という実害が確認された以上、安全側の`align`を既定にする
+方針とした。
+
+## Pairwise identityのグリッド化と`--identity-format`オプション
+
+上記の`--method align`のやり取りの中で、ユーザーから「`== Pairwise identity ==`セクションには
+最初の構造(整列の基準)も含めてidentity/overlapをマトリックスのように表示してほしい」との
+要望を受けた。
+
+調査したところ、既存の`format_identity_matrix()`は以下の制約があった:
+
+- `structcompare.match_chains()`(構造=ProDy Atomicの比較)ベースだったため、`atoms`を持たない
+  FASTA入力(基準配列としてよく使われる)がPairwise identityから完全に除外されていた
+  (`--method align`の基準がFASTAであることが多い実運用と噛み合っていなかった)。
+- 出力が「A vs B identity=...% overlap=...% (n=...)」というフラットなリスト形式で、
+  「マトリックス」ではなかった。
+
+これを受けて`format_identity_matrix()`を全面的に書き直した:
+
+- 比較方法を`structcompare.match_chains()`から`seqalign.align_to_reference()`に統一した
+  (`--method align`の整列表示と同じ計算基盤)。これにより`atoms`の有無に関わらず、全チェーンの
+  組み合わせ(同一構造内の複数チェーン同士、FASTA同士も含む)を計算できるようになった。
+  `structcompare.match_chains()`はこの用途では使わなくなった(`find_substitutions()`は
+  `format_mutation_report()`が引き続き使用)。
+- 出力をN×Nのグリッド表(行・列に`<ラベル>:<チェーンID>`、対角は`-`)に変更した。
+
+表示形式について、identityに加えcoverageも表示したいという追加要望があったが、coverageは
+基準配列(行)の長さが分母のため**非対称**(行と列を入れ替えると値が変わる)という性質があり、
+「1つの表にidentity/coverageを結合するか」「2つの表に分けるか」でユーザーの好みが定まらず、
+「両方試してみたい」との要望を受けたため、両方式を実装して`--identity-format`
+(`combined`/`separate`、既定`combined`)で選べるようにした:
+
+- `_pairwise_alignment_grid()`: 全チェーンの組み合わせ(順序あり、対角除く)について
+  `align_to_reference()`を計算する共通ヘルパー(identityは方向によらずほぼ同じ値になるため
+  対角より上のみ計算して複製する最適化を`format_identity_matrix()`側で別途行うが、coverageは
+  非対称なため全方向を計算する必要がある)。
+- `_render_grid_table()`: ラベル・セル値からN×Nのグリッド表を整形する共通ヘルパー。
+- `format_identity_matrix()`: identityのみのグリッド(`combined`/`separate`共通で使う)。
+- `format_coverage_matrix()`: coverageのみのグリッド(`separate`用、非対称)。
+- `format_identity_coverage_matrix()`: `identity/coverage`を1セルにまとめたグリッド(`combined`用)。
+- `build_report()`に`identity_format`引数を追加し、`combined`なら`== Pairwise identity/coverage ==`
+  の1セクション、`separate`なら`== Pairwise identity ==`+`== Coverage ==`の2セクションを出力する。
+
 ## 実装ファイル
 
 - `src/seqextract/chains.py` — 構造(Atomic)からの蛋白チェーン配列+残基番号の抽出(ProDy)
@@ -286,12 +357,15 @@ pytest tests/sequencealign tests/seqextract tests/structcompare tests/seqalign t
 ## 動作例(実データ)
 
 ```bash
-pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
+pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --method number
 pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
 pf sequence-align --indir data/mpro P0DTD1.fasta 6LU7_abc
 pf sequence-align --indir data/mpro P0DTD1 6LU7_abc
 # => 上記2つは同じ結果になる(P0DTD1.cif/.pdbが存在しないため.fastaに解決される)。
-#    P0DTD1:AがAlignmentセクションに他の構造と同じ行として加わる(reference専用の仕組みは廃止)。
+#    既定(--method align)でP0DTD1:6LU7がP0DTD1内の正しい位置(残基3264付近)に整列し、
+#    Pairwise identity/coverageセクションにも両者が含まれる(reference専用の仕組みは廃止)。
+pf sequence-align --indir data/mpro P0DTD1 6LU7_abc --identity-format separate
+# => identity表・coverage表を分けて出力する。
 ```
 
 (`--reference`オプション廃止前の動作例。BRAF(P15056)のAlphaFoldモデルと結晶構造4MNFを

@@ -28,7 +28,7 @@ def test_sequence_align_prints_report_to_stdout(tmp_path):
     result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(p2)])
 
     assert result.exit_code == 0, result.output
-    assert "== Pairwise identity ==" in result.output
+    assert "== Pairwise identity/coverage ==" in result.output  # --identity-formatの既定は"combined"
     assert "== Alignment (sequence-aligned) ==" in result.output  # --methodの既定は"align"
     # FASTA・Substitutionsセクションはユーザー要望により出力しない
     assert "== Sequences" not in result.output
@@ -86,7 +86,7 @@ def test_sequence_align_writes_output_file(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert out_path.exists()
-    assert "== Pairwise identity ==" in out_path.read_text()
+    assert "== Pairwise identity/coverage ==" in out_path.read_text()
 
 
 def test_sequence_align_requires_at_least_one_path():
@@ -118,4 +118,19 @@ def test_sequence_align_method_align_aligns_domain_within_full_length_sequence(t
 
     assert result.exit_code == 0, result.output
     assert "== Alignment (sequence-aligned) ==" in result.output
+
+
+def test_sequence_align_identity_format_separate_shows_two_tables(tmp_path):
+    fasta_path = tmp_path / "full.fasta"
+    fasta_path.write_text(">full\nAAAAAMENFQKVEKICCCCC\n")
+    domain_path = tmp_path / "domain.pdb"
+    _write_pdb(domain_path, ["MET", "GLU", "ASN", "PHE", "GLN", "LYS", "VAL", "GLU", "LYS", "ILE"], start=1)
+
+    result = CliRunner().invoke(
+        sequence_align_cmd, [str(fasta_path), str(domain_path), "--identity-format", "separate"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "== Pairwise identity ==" in result.output
+    assert "== Coverage ==" in result.output
     assert "domain:A  -----MENFQKVEKI-----" in result.output

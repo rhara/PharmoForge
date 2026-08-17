@@ -27,6 +27,19 @@ _INPUT_EXTENSIONS = (".cif", ".mmcif", ".pdb", ".fasta")
     ),
 )
 @click.option(
+    "--identity-format",
+    type=click.Choice(["combined", "separate"]),
+    default="combined",
+    show_default=True,
+    help=(
+        "Layout of the pairwise identity section. 'combined' shows one table with "
+        "'identity/coverage' per cell. 'separate' shows two tables, one for identity "
+        "and one for coverage. Coverage is asymmetric (row = reference sequence, "
+        "column = compared sequence; row length is the denominator), so cell (row, "
+        "col) can differ from cell (col, row)."
+    ),
+)
+@click.option(
     "--width",
     type=int,
     default=DEFAULT_ALIGN_WIDTH,
@@ -41,17 +54,19 @@ _INPUT_EXTENSIONS = (".cif", ".mmcif", ".pdb", ".fasta")
     default=None,
     help="Path to save the report to (default: print to stdout).",
 )
-def sequence_align_cmd(tokens: tuple[str, ...], method: str, width: int, output_path: Path | None):
+def sequence_align_cmd(
+    tokens: tuple[str, ...], method: str, identity_format: str, width: int, output_path: Path | None
+):
     """Extract protein sequences from multiple PDB/CIF structures (and/or plain FASTA
     files) and report pairwise identity and an alignment.
 
     Sequences from PDB/CIF are extracted per chain from observed CA atoms only, so
     residues not resolved in the electron density are excluded (this can differ from
-    the full UniProt sequence). A .fasta input has no atomic structure, so its
-    sequence(s) are used as-is and it is excluded from pairwise identity (which needs
-    both sides' atoms). To add a reference sequence (e.g. a UniProt canonical
-    sequence) to the alignment, just include it as a regular .fasta input token
-    alongside the structures.
+    the full UniProt sequence). A .fasta input has no atomic structure, but is still
+    included in both the pairwise identity section (via pairwise sequence alignment)
+    and the alignment section. To add a reference sequence (e.g. a UniProt canonical
+    sequence), just include it as a regular .fasta input token alongside the
+    structures.
 
     --method controls how the alignment section lines sequences up (see --method
     above): 'align' (default) uses real sequence alignment, so numbering doesn't need
@@ -74,10 +89,11 @@ def sequence_align_cmd(tokens: tuple[str, ...], method: str, width: int, output_
       pf sequence-align --indir data/mpro P0DTD1.fasta 6LU7_abc
       pf sequence-align --indir data/mpro P0DTD1 6LU7_abc
       pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a --method number
+      pf sequence-align --indir data/mpro P0DTD1 6LU7_abc --identity-format separate
     """
     structure_paths = resolve_structure_tokens(tokens, extensions=_INPUT_EXTENSIONS)
     structures = load_labeled_structures(structure_paths)
-    report = build_report(structures, align_width=width, method=method)
+    report = build_report(structures, align_width=width, method=method, identity_format=identity_format)
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(report)
