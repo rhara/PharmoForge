@@ -70,3 +70,40 @@ def test_indir_stem_not_found_raises(tmp_path):
 def test_no_tokens_raises():
     with pytest.raises(click.UsageError):
         resolve_structure_tokens(())
+
+
+def test_default_extensions_do_not_resolve_fasta(tmp_path):
+    (tmp_path / "a.fasta").write_text(">a\nMENFQKVEKI\n")
+
+    with pytest.raises(click.UsageError):
+        resolve_structure_tokens(("--indir", str(tmp_path), "a"))
+
+
+def test_custom_extensions_can_include_fasta(tmp_path):
+    (tmp_path / "a.fasta").write_text(">a\nMENFQKVEKI\n")
+
+    result = resolve_structure_tokens(
+        ("--indir", str(tmp_path), "a"), extensions=(".cif", ".pdb", ".fasta")
+    )
+
+    assert result == [tmp_path / "a.fasta"]
+
+
+def test_custom_extensions_still_prefer_earlier_entries(tmp_path):
+    (tmp_path / "a.cif").write_text("data_a\n")
+    (tmp_path / "a.fasta").write_text(">a\nMENFQKVEKI\n")
+
+    result = resolve_structure_tokens(
+        ("--indir", str(tmp_path), "a"), extensions=(".cif", ".pdb", ".fasta")
+    )
+
+    assert result == [tmp_path / "a.cif"]
+
+
+def test_explicit_fasta_extension_resolves_regardless_of_default_extensions(tmp_path):
+    fasta_path = tmp_path / "a.fasta"
+    fasta_path.write_text(">a\nMENFQKVEKI\n")
+
+    result = resolve_structure_tokens(("--indir", str(tmp_path), "a.fasta"))
+
+    assert result == [fasta_path]

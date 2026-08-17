@@ -133,6 +133,18 @@ def test_fetch_entry_calls_expected_url(mock_get):
     assert called_url == "https://rest.uniprot.org/uniprotkb/P00533.json"
 
 
+@patch("uniprot.entry.requests.get")
+def test_fetch_fasta_calls_expected_url(mock_get):
+    fasta_bytes = b">sp|P00533|EGFR_HUMAN Epidermal growth factor receptor\nMRPSGTAGAA\n"
+    mock_get.return_value = MagicMock(content=fasta_bytes, raise_for_status=lambda: None)
+
+    result = entry.fetch_fasta("p00533")
+
+    assert result == fasta_bytes
+    called_url = mock_get.call_args[0][0]
+    assert called_url == "https://rest.uniprot.org/uniprotkb/P00533.fasta"
+
+
 @patch("uniprot.entry.fetch_entry")
 def test_fetch_protein_info_combines_fetch_and_extract(mock_fetch_entry):
     mock_fetch_entry.return_value = SAMPLE_ENTRY

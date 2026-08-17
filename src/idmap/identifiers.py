@@ -14,6 +14,8 @@ logger = get_logger(__name__)
 
 UNIPROT_ENTRY_URL = "https://rest.uniprot.org/uniprotkb/{identifier}.json"
 CHEMBL_TARGET_URL = "https://www.ebi.ac.uk/chembl/api/data/target.json"
+RCSB_ENTRY_URL = "https://data.rcsb.org/rest/v1/core/entry/{pdb_id}"
+RCSB_POLYMER_ENTITY_URL = "https://data.rcsb.org/rest/v1/core/polymer_entity/{pdb_id}/{entity_id}"
 
 _CHEMBL_ID_RE = re.compile(r"^CHEMBL\d+$", re.IGNORECASE)
 _UNIPROT_ACCESSION_RE = re.compile(
@@ -81,3 +83,37 @@ def resolve_chembl_target_id(identifier: str) -> str:
     if looks_like_chembl_id(identifier):
         return identifier.upper()
     return accession_to_chembl_target_id(resolve_uniprot_accession(identifier))
+
+
+def pdb_id_to_uniprot_accessions(pdb_id: str) -> list[str]:
+    """PDB ID(例: 9CSK)配下の全ポリマーエンティティに紐づくUniProt accessionを、
+    重複なく出現順で返す。
+
+    1つのPDBエントリに複数の蛋白質(複合体)が含まれる場合は複数のaccessionが返る。
+    RCSB Data API(`data.rcsb.org`)を使う: まずエントリのポリマーエンティティID一覧を取得し、
+    各エンティティごとにUniProt cross-reference(`rcsb_polymer_entity_container_identifiers.uniprot_ids`)
+    を取得して集約する。
+    """
+    pdb_id = pdb_id.strip().upper()
+    logger.info("Resolving UniProt accession(s) for PDB entry %s ...", pdb_id)
+    entry_resp = requests.get(RCSB_ENTRY_URL.format(pdb_id=pdb_id), timeout=30)
+    entry_resp.raise_for_status()
+    entity_ids = entry_resp.json()["rcsb_entry_container_identifiers"]["polymer_entity_ids"]
+
+    accessions: list[str] = []
+    for entity_id in entity_ids:
+        resp = requests.get(
+            RCSB_POLYMER_ENTITY_URL.format(pdb_id=pdb_id, entity_id=entity_id), timeout=30
+        )
+        resp.raise_for_status()
+        entity_accessions = (
+            resp.json().get("rcsb_polymer_entity_container_identifiers", {}).get("uniprot_ids") or []
+        )
+        for accession in entity_accessions:
+            if accession not in accessions:
+                accessions.append(accession)
+
+    if not accessions:
+        raise ValueError(f"No UniProt accession found for PDB ID: {pdb_id}")
+    logger.info("  -> %s", accessions)
+    return accessions

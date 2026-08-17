@@ -73,6 +73,102 @@ def test_fetch_structure_multiple_dispatch(tmp_path):
     ]
 
 
+def test_fetch_structure_fasta_dispatch_resolves_pdb_id_to_uniprot(tmp_path):
+    outdir = tmp_path / "data"
+    runner = CliRunner()
+    with (
+        patch(
+            "fetcher.cli.pdb_id_to_uniprot_accessions", return_value=["P24385", "P11802"]
+        ) as mock_resolve,
+        patch("fetcher.cli.fetch_af_structure") as mock_fetch,
+    ):
+        result = runner.invoke(
+            fetch_cmd, ["structure=9CSK", "--type=fasta", "--outdir", str(outdir)]
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_resolve.assert_called_once_with("9CSK")
+    assert mock_fetch.call_args_list == [
+        (("P24385", outdir / "P24385.fasta"), {"fmt": "fasta"}),
+        (("P11802", outdir / "P11802.fasta"), {"fmt": "fasta"}),
+    ]
+
+
+def test_fetch_structure_fasta_dispatch_uniprot_entry_name_without_af(tmp_path):
+    outdir = tmp_path / "data"
+    runner = CliRunner()
+    with (
+        patch("fetcher.cli.resolve_uniprot_accession", return_value="P0DTD1") as mock_resolve_acc,
+        patch("fetcher.cli.pdb_id_to_uniprot_accessions") as mock_resolve_pdb,
+        patch("fetcher.cli.fetch_af_structure") as mock_fetch,
+    ):
+        result = runner.invoke(
+            fetch_cmd, ["structure=R1AB_SARS2", "--type=fasta", "--outdir", str(outdir)]
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_resolve_acc.assert_called_once_with("R1AB_SARS2")
+    mock_resolve_pdb.assert_not_called()
+    mock_fetch.assert_called_once_with("P0DTD1", outdir / "P0DTD1.fasta", fmt="fasta")
+
+
+def test_fetch_structure_fasta_dispatch_uniprot_accession_without_af(tmp_path):
+    outdir = tmp_path / "data"
+    runner = CliRunner()
+    with (
+        patch("fetcher.cli.resolve_uniprot_accession", return_value="P61626") as mock_resolve_acc,
+        patch("fetcher.cli.pdb_id_to_uniprot_accessions") as mock_resolve_pdb,
+        patch("fetcher.cli.fetch_af_structure") as mock_fetch,
+    ):
+        result = runner.invoke(
+            fetch_cmd, ["structure=P61626", "--type=fasta", "--outdir", str(outdir)]
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_resolve_acc.assert_called_once_with("P61626")
+    mock_resolve_pdb.assert_not_called()
+    mock_fetch.assert_called_once_with("P61626", outdir / "P61626.fasta", fmt="fasta")
+
+
+def test_fetch_structure_af_fasta_dispatch_ignores_af_and_warns(tmp_path):
+    outdir = tmp_path / "data"
+    runner = CliRunner()
+    with (
+        patch("fetcher.cli.resolve_uniprot_accession", return_value="P61626") as mock_resolve_acc,
+        patch("fetcher.cli.pdb_id_to_uniprot_accessions") as mock_resolve_pdb,
+        patch("fetcher.cli.fetch_af_structure") as mock_fetch,
+    ):
+        result = runner.invoke(
+            fetch_cmd, ["structure=P61626", "--af", "--type=fasta", "--outdir", str(outdir)]
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_resolve_acc.assert_called_once_with("P61626")
+    mock_resolve_pdb.assert_not_called()
+    mock_fetch.assert_called_once_with("P61626", outdir / "P61626.fasta", fmt="fasta")
+
+
+def test_fetch_structure_fasta_dedupes_accessions_across_identifiers(tmp_path):
+    outdir = tmp_path / "data"
+    runner = CliRunner()
+    with (
+        patch(
+            "fetcher.cli.pdb_id_to_uniprot_accessions",
+            side_effect=[["P24385", "P11802"], ["P11802"]],
+        ),
+        patch("fetcher.cli.fetch_af_structure") as mock_fetch,
+    ):
+        result = runner.invoke(
+            fetch_cmd, ["structure=9CSK,6P8F", "--type=fasta", "--outdir", str(outdir)]
+        )
+
+    assert result.exit_code == 0, result.output
+    assert mock_fetch.call_args_list == [
+        (("P24385", outdir / "P24385.fasta"), {"fmt": "fasta"}),
+        (("P11802", outdir / "P11802.fasta"), {"fmt": "fasta"}),
+    ]
+
+
 def test_fetch_structure_af_single_dispatch(tmp_path):
     outdir = tmp_path / "data"
     runner = CliRunner()

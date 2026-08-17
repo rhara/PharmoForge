@@ -57,6 +57,7 @@ class AlignmentResult:
     aligned_length: int  # アラインメントされた位置数(ギャップを除く)
     substitutions: list[SequenceSubstitution]
     gaps: list[SequenceGap]
+    query_by_ref_pos: dict[int, str]  # 基準配列内の位置(1始まり)→対応するquery側のアミノ酸(ギャップの位置は含まない)
 
 
 def align_to_reference(ref_sequence: str, query_sequence: str, query_resnums: list[int]) -> AlignmentResult:
@@ -78,6 +79,7 @@ def align_to_reference(ref_sequence: str, query_sequence: str, query_resnums: li
     query_blocks = [(int(s), int(e)) for s, e in query_blocks]
     substitutions = []
     gaps = []
+    query_by_ref_pos: dict[int, str] = {}
     aligned_length = 0
     n_identical = 0
     prev_ref_end = 0
@@ -110,6 +112,7 @@ def align_to_reference(ref_sequence: str, query_sequence: str, query_resnums: li
         for offset in range(ref_end - ref_start):
             ref_i = ref_start + offset
             q_i = q_start + offset
+            query_by_ref_pos[ref_i + 1] = query_sequence[q_i]
             if ref_sequence[ref_i] == query_sequence[q_i]:
                 n_identical += 1
             else:
@@ -159,4 +162,5 @@ def align_to_reference(ref_sequence: str, query_sequence: str, query_resnums: li
         aligned_length=aligned_length,
         substitutions=substitutions,
         gaps=gaps,
+        query_by_ref_pos=query_by_ref_pos,
     )

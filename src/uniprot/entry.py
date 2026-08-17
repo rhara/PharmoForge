@@ -7,6 +7,7 @@ from core.logging_utils import get_logger
 logger = get_logger(__name__)
 
 UNIPROT_ENTRY_URL = "https://rest.uniprot.org/uniprotkb/{accession}.json"
+UNIPROT_FASTA_URL = "https://rest.uniprot.org/uniprotkb/{accession}.fasta"
 
 
 def fetch_entry(accession: str) -> dict:
@@ -16,6 +17,15 @@ def fetch_entry(accession: str) -> dict:
     resp = requests.get(UNIPROT_ENTRY_URL.format(accession=accession), timeout=30)
     resp.raise_for_status()
     return resp.json()
+
+
+def fetch_fasta(accession: str) -> bytes:
+    """UniProt accession(例: P00533)の正規配列をUniProt標準のFASTA形式で取得する。"""
+    accession = accession.strip().upper()
+    logger.info("Fetching UniProt FASTA for %s ...", accession)
+    resp = requests.get(UNIPROT_FASTA_URL.format(accession=accession), timeout=30)
+    resp.raise_for_status()
+    return resp.content
 
 
 def _location(feature: dict) -> tuple[int, int]:

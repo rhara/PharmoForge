@@ -1,6 +1,7 @@
 """複数構造間の蛋白配列比較レポート(FASTA・pairwise identity・基準配列に対する置換一覧)。"""
 
 import re
+import string
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from core.logging_utils import get_logger
 from seqalign import align_to_reference
 from seqextract import ChainSequence, get_chain_sequences
 from structcompare import find_substitutions, match_chains
-from structio import parse_structure
+from structio import parse_fasta, parse_structure
 
 logger = get_logger(__name__)
 
@@ -22,23 +23,51 @@ _SEQUENCE_PATTERN = re.compile(r"^[ACDEFGHIKLMNPQRSTVWYXBZJUO]+$")
 
 @dataclass
 class LabeledStructure:
-    """入力トークンから解決したファイル名(拡張子抜き)をラベルとする構造。"""
+    """入力トークンから解決したファイル名(拡張子抜き)をラベルとする構造。
+
+    `.fasta`から読み込んだ場合、`atoms`は`None`になる(3次元構造を持たないため)。
+    pairwise identity(`format_identity_matrix`)や構造基準の置換検出
+    (`format_mutation_report`の`label:chain_id`形式)など`atoms`を要する処理は、
+    `atoms`が`None`の構造を対象から除外する。
+    """
 
     label: str
-    atoms: Atomic
+    atoms: Atomic | None
     chains: list[ChainSequence]
 
 
 def load_labeled_structures(paths: list[Path]) -> list[LabeledStructure]:
-    """構造ファイルを読み込み、ファイル名(拡張子抜き)をラベルとして付与する。"""
+    """構造ファイル(PDB/CIF)またはFASTAファイルを読み込み、ファイル名(拡張子抜き)を
+    ラベルとして付与する。
+    """
     structures = []
     for path in paths:
-        logger.info("Loading structure from %s ...", path)
-        atoms = parse_structure(path)
-        chains = get_chain_sequences(atoms)
-        logger.info("  -> %d protein chain(s): %s", len(chains), [c.chain_id for c in chains])
-        structures.append(LabeledStructure(label=path.stem, atoms=atoms, chains=chains))
+        if path.suffix.lower() == ".fasta":
+            logger.info("Loading sequence(s) from %s ...", path)
+            chains = _chains_from_fasta(path)
+            logger.info("  -> %d sequence(s): %s", len(chains), [c.chain_id for c in chains])
+            structures.append(LabeledStructure(label=path.stem, atoms=None, chains=chains))
+        else:
+            logger.info("Loading structure from %s ...", path)
+            atoms = parse_structure(path)
+            chains = get_chain_sequences(atoms)
+            logger.info("  -> %d protein chain(s): %s", len(chains), [c.chain_id for c in chains])
+            structures.append(LabeledStructure(label=path.stem, atoms=atoms, chains=chains))
     return structures
+
+
+def _chains_from_fasta(path: Path) -> list[ChainSequence]:
+    """FASTAの各レコードを、A/B/C...と順にチェーンIDを振った`ChainSequence`に変換する。
+
+    FASTAには残基番号情報がないため、1残基目をresnum=1として連番を振る
+    (`format_alignment_block`のsequenceタイプreferenceと同じ前提)。
+    """
+    records = parse_fasta(path)
+    chains = []
+    for i, (_, sequence) in enumerate(records):
+        chain_id = string.ascii_uppercase[i] if i < len(string.ascii_uppercase) else str(i + 1)
+        chains.append(ChainSequence(chain_id=chain_id, sequence=sequence, resnums=list(range(1, len(sequence) + 1))))
+    return chains
 
 
 def _wrap(seq: str, width: int = _FASTA_WIDTH) -> str:
@@ -58,12 +87,18 @@ def format_fasta(structures: list[LabeledStructure]) -> str:
 
 
 def format_identity_matrix(structures: list[LabeledStructure]) -> str:
-    """全構造の組み合わせについて、チェーン単位のpairwise identity/overlapを一覧化する。"""
+    """全構造の組み合わせについて、チェーン単位のpairwise identity/overlapを一覧化する。
+
+    `atoms`を持たない構造(FASTAから読み込んだもの)が絡む組み合わせは、比較に
+    3次元構造を要するため対象から除外する。
+    """
     rows = []
     for i in range(len(structures)):
         for j in range(i + 1, len(structures)):
             sa, sb = structures[i], structures[j]
             if not sa.chains or not sb.chains:
+                continue
+            if sa.atoms is None or sb.atoms is None:
                 continue
             for m in match_chains(sa.atoms, sb.atoms):
                 rows.append(
@@ -75,35 +110,28 @@ def format_identity_matrix(structures: list[LabeledStructure]) -> str:
     return "\n".join(rows) + "\n"
 
 
-def format_alignment_block(
-    structures: list[LabeledStructure], width: int = DEFAULT_ALIGN_WIDTH, reference: str | None = None
-) -> str:
+def format_alignment_block(structures: list[LabeledStructure], width: int = DEFAULT_ALIGN_WIDTH) -> str:
     """全構造・全蛋白チェーンの配列を、残基番号を共通の軸として横並びに整列表示する
     (`width`残基ごとに折り返す)。
 
     配列アラインメントは行わず、残基番号が一致する列に同じアミノ酸が並ぶ前提で
     並べる(構造間でPDBの残基番号が揃っている前提。`pf align-view --method number`
-    と同じ前提)。観測されていない残基は`-`で埋める。異なる蛋白の構造を混在させると
-    無意味な結果になる点に注意(通常は同一蛋白の複数構造を対象とする)。
+    と同じ前提)。観測されていない残基は`-`で埋める。番号体系が揃っていない構造
+    (例: 全長のUniProt配列と、その一部ドメインのみを含む結晶構造)を混在させると
+    無意味な結果になる点に注意(その場合は`format_alignment_block_by_sequence`を使う)。
 
-    `reference`がアミノ酸配列(コロンを含まない)の場合、その配列も`reference`という
-    行として加える。基準配列の1文字目を残基番号1として扱う(基準配列が構造と同じ
-    UniProt番号体系で、通常は残基1から始まる前提)。`reference`が`ラベル:チェーンID`の
-    場合は、対応するチェーンがすでに`structures`側の行として含まれているため何もしない。
+    基準配列(UniProt正規配列等)を加えたい場合は、その配列を`.fasta`ファイルとして
+    入力トークンに含めればよい(`load_labeled_structures`が1残基目をresnum=1として
+    読み込むため、他の行と同じ軸で並ぶ。特別な「reference」行の仕組みは持たない)。
     """
     entries: list[tuple[str, str, list[int]]] = [
         (f"{s.label}:{c.chain_id}", c.sequence, c.resnums) for s in structures for c in s.chains
     ]
-    if reference and ":" not in reference:
-        ref_sequence = reference.upper()
-        if _SEQUENCE_PATTERN.match(ref_sequence):
-            entries.insert(0, ("reference", ref_sequence, list(range(1, len(ref_sequence) + 1))))
     if not entries:
         return "(no protein chains found)\n"
 
     all_resnums = {r for _, _, resnums in entries for r in resnums}
     min_resnum, max_resnum = min(all_resnums), max(all_resnums)
-    label_width = max(len(label) for label, _, _ in entries)
 
     rows = []
     for label, sequence, resnums in entries:
@@ -111,12 +139,52 @@ def format_alignment_block(
         padded = "".join(seq_by_resnum.get(r, "-") for r in range(min_resnum, max_resnum + 1))
         rows.append((label, padded))
 
-    total_length = max_resnum - min_resnum + 1
+    return _render_alignment_blocks(rows, width, start_pos=min_resnum)
+
+
+def format_alignment_block_by_sequence(structures: list[LabeledStructure], width: int = DEFAULT_ALIGN_WIDTH) -> str:
+    """全構造・全蛋白チェーンの配列を、配列の相同性(ペアワイズグローバルアラインメント)に
+    基づいて位置を揃えて横並びに整列表示する(`width`残基ごとに折り返す)。
+
+    `format_alignment_block`(残基番号ベース)と異なり、構造間でPDBの残基番号が揃っていない
+    場合でも正しい位置に並べられる(例: 全長のUniProt配列と、その一部ドメインのみを含む
+    結晶構造の組み合わせ)。基準は先頭の構造の先頭チェーン(`pf align-view --method align`が
+    先頭構造を基準にするのと同じ考え方)とし、他の全チェーンをこの基準配列に対して個別に
+    ペアワイズアラインメントする(`seqalign.align_to_reference`、Biopython
+    `PairwiseAligner`によるグローバルアラインメント)ため、複数配列同時アラインメント(MSA)
+    ではない点に注意。異なる蛋白の配列を混在させると無意味な結果になる点は
+    `format_alignment_block`と同じ。
+    """
+    all_chains = [(f"{s.label}:{c.chain_id}", c) for s in structures for c in s.chains]
+    if not all_chains:
+        return "(no protein chains found)\n"
+
+    ref_label, ref_chain = all_chains[0]
+    ref_sequence = ref_chain.sequence
+    ref_length = len(ref_sequence)
+
+    rows = [(ref_label, ref_sequence)]
+    for label, chain in all_chains[1:]:
+        result = align_to_reference(ref_sequence, chain.sequence, chain.resnums)
+        padded = "".join(result.query_by_ref_pos.get(pos, "-") for pos in range(1, ref_length + 1))
+        rows.append((label, padded))
+
+    return _render_alignment_blocks(rows, width, start_pos=1)
+
+
+def _render_alignment_blocks(rows: list[tuple[str, str]], width: int, start_pos: int) -> str:
+    """`(label, padded_sequence)`の行リストを、`width`残基ごとにルーラー付きで折り返す。
+
+    全行の`padded_sequence`は同じ長さで、列`i`(0始まり)が軸上の位置`start_pos + i`に
+    対応する前提(`format_alignment_block`/`format_alignment_block_by_sequence`共通)。
+    """
+    label_width = max(len(label) for label, _ in rows)
+    total_length = len(rows[0][1])
     blocks = []
     for block_start in range(0, total_length, width):
         block_end = min(block_start + width, total_length)
-        block_first_resnum = min_resnum + block_start
-        number_line, tick_line = _format_ruler(block_first_resnum, block_end - block_start)
+        block_first_pos = start_pos + block_start
+        number_line, tick_line = _format_ruler(block_first_pos, block_end - block_start)
         indent = " " * (label_width + 2)
         block_lines = [indent + number_line, indent + tick_line]
         block_lines += [f"{label.ljust(label_width)}  {seq[block_start:block_end]}" for label, seq in rows]
@@ -230,6 +298,11 @@ def format_mutation_report(structures: list[LabeledStructure], reference: str) -
 def _format_mutation_report_vs_structure(structures: list[LabeledStructure], reference: str) -> str:
     ref_label, _, ref_chain_id = reference.partition(":")
     ref_structure = _find_structure(structures, ref_label)
+    if ref_structure.atoms is None:
+        raise ValueError(
+            f"reference {reference!r} has no atomic structure (loaded from FASTA); "
+            "use an amino acid sequence as --reference instead"
+        )
     ref_atoms = ref_structure.atoms.select(f"protein and chain {ref_chain_id}")
     if ref_atoms is None:
         raise ValueError(f"chain not found: {reference!r}")
@@ -238,6 +311,9 @@ def _format_mutation_report_vs_structure(structures: list[LabeledStructure], ref
     lines = [f"reference: {reference}", _wrap(ref_chain.sequence) if ref_chain else ""]
     for s in structures:
         if s.label == ref_label:
+            continue
+        if s.atoms is None:
+            lines.append(f"  {s.label}: no atomic structure (loaded from FASTA); residue-number-based comparison not available")
             continue
         report = find_substitutions(ref_atoms, s.atoms)
         if not report.matched:
@@ -301,33 +377,27 @@ def _format_mutation_report_vs_sequence(structures: list[LabeledStructure], refe
     return "\n".join(lines) + "\n"
 
 
-def _validate_reference(structures: list[LabeledStructure], reference: str) -> None:
-    """`--reference`の妥当性を検証する(`format_alignment_block`はreference行の追加可否を
-    静かに判定するだけで、存在しないラベル/チェーンや不正な配列文字列を検出しないため、
-    ここで明示的にエラーを出す)。
-    """
-    if ":" in reference:
-        ref_label, _, ref_chain_id = reference.partition(":")
-        ref_structure = _find_structure(structures, ref_label)
-        if ref_structure.atoms.select(f"protein and chain {ref_chain_id}") is None:
-            raise ValueError(f"chain not found: {reference!r}")
-    elif not _SEQUENCE_PATTERN.match(reference.upper()):
-        raise ValueError(
-            "--reference must be either 'label:chain_id' (e.g. P24941_AF:A) "
-            f"or an amino acid sequence (one-letter code): {reference!r}"
-        )
-
-
 def build_report(
-    structures: list[LabeledStructure], reference: str | None, align_width: int = DEFAULT_ALIGN_WIDTH
+    structures: list[LabeledStructure], align_width: int = DEFAULT_ALIGN_WIDTH, method: str = "align"
 ) -> str:
-    """Pairwise identity・整列表示(reference指定時はreference行を含む)をまとめたレポートを組み立てる。"""
-    if reference:
-        _validate_reference(structures, reference)
+    """Pairwise identity・整列表示をまとめたレポートを組み立てる。
+
+    `method`(`align`/`number`)は整列表示の方式を選ぶ。`align`(既定)は配列の相同性に基づく
+    ペアワイズアラインメントベース(`format_alignment_block_by_sequence`)で、番号体系が
+    揃っていない構造の組み合わせでも正しく並ぶ。`number`は残基番号ベース
+    (`format_alignment_block`)で、構造間でPDBの残基番号が既に揃っている(同じUniProt番号体系
+    等)ことが分かっている場合にのみ使う。
+    """
+    if method == "number":
+        heading = "== Alignment (by residue number) =="
+        alignment = format_alignment_block(structures, width=align_width)
+    else:
+        heading = "== Alignment (sequence-aligned) =="
+        alignment = format_alignment_block_by_sequence(structures, width=align_width)
     parts = [
         "== Pairwise identity ==",
         format_identity_matrix(structures),
-        "== Alignment (by residue number) ==",
-        format_alignment_block(structures, width=align_width, reference=reference),
+        heading,
+        alignment,
     ]
     return "\n".join(parts)

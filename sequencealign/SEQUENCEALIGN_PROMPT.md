@@ -152,6 +152,9 @@ PharmoForgeの既存方針通り日本語のまま変更していない。
 
 ## CLI仕様
 
+(`--reference`は後日廃止された。現在のCLI仕様は下記「FASTA入力対応と`--reference`オプションの
+廃止」節、および[README.md](README.md)を参照。以下は導入当時の記録。)
+
 ```
 pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference <基準>] [--width <残基数>] [--output <出力ファイル>]
 ```
@@ -220,12 +223,51 @@ pf sequence-align <構造ファイル1> [<構造ファイル2> ...] [--reference
 書き換えて共用するようにした(既存テストは`CliRunner`経由でCLI全体の挙動を検証しているため
 挙動に変更はない。専用ユニットテストを`tests/structio/test_resolve.py`に追加)。
 
+## FASTA入力対応と`--reference`オプションの廃止
+
+ユーザーからの要望: 「`pf sequence-align --indir data/mpro P0DTD1.fasta 6LU7_abc`のように、
+FASTA形式も入力に対応してほしい。拡張子がない場合は優先順位`.cif`, `.pdb`, `.fasta`の順。
+`P0DTD1`は3次元構造を持たずFASTAファイルのみのため、拡張子省略(`P0DTD1`のみ)でも機能してほしい」。
+
+- `src/structio/resolve.py`の`resolve_structure_tokens()`に`extensions`引数を追加し、
+  拡張子省略時に試す拡張子リストを呼び出し元ごとに変更できるようにした(既定は従来通り
+  `.cif`/`.mmcif`/`.pdb`)。`sequencealign/cli.py`は`(".cif", ".mmcif", ".pdb", ".fasta")`を渡す。
+  `alignview`(PyMOLでの3次元表示が前提)は`.fasta`を追加しておらず、従来通り構造ファイルの
+  拡張子のみ解決する(共有インフラである`resolve.py`本体に`.fasta`をグローバルに追加すると、
+  align-viewが構造を持たないFASTAを誤って解決してしまうため、呼び出し元ごとに切り替える設計にした)。
+- `src/structio/fasta.py`を新設し、`parse_fasta(path) -> list[tuple[str, str]]`(Biopython`SeqIO`で
+  ヘッダー・配列のタプル列を返す)をアトミックな技術要素として追加した。
+- `LabeledStructure.atoms`を`Atomic | None`に変更し、`.fasta`から読み込んだ場合は`atoms=None`とした
+  (3次元構造を持たないため)。`chains`はFASTAの各レコードをA, B, C...と順にチェーンIDを振った
+  `ChainSequence`に変換して構築する(1残基目をresnum=1として連番。従来の`--reference`アミノ酸配列
+  指定時と同じ前提)。
+- `atoms`を要する処理(`format_identity_matrix()`の`matchChains`呼び出し、
+  `format_mutation_report()`の`label:chain_id`基準)は、`atoms is None`の構造を対象から除外する
+  (前者は静かにスキップ、後者は基準に指定された場合は明確な`ValueError`、比較対象に含まれる場合は
+  「no atomic structure (loaded from FASTA)」という行を出す)。
+
+この対応により、基準配列(UniProt正規配列等)を渡す専用の`--reference`オプションが不要になった
+(整列表示への基準行追加という`--reference`の主用途を、`.fasta`を通常の入力ファイルとして渡す方式が
+完全に代替するため)、とユーザーから指摘があり、`--reference`オプションを廃止した:
+
+- `sequence_align_cmd`から`--reference`の`click.option`を削除。
+- `build_report()`/`format_alignment_block()`から`reference`引数と、それに伴うreference行挿入ロジック・
+  `_validate_reference()`を削除した(いずれも`--reference`専用のロジックで、他から呼ばれていなかった)。
+- `format_mutation_report()`(`label:chain_id`/アミノ酸配列のどちらでも基準にできる置換検出)は
+  `--reference`とは独立した別機能であり、そもそも`build_report()`(実際のCLI出力)からは呼ばれて
+  いなかったため(上記「出力セクションの絞り込み」参照)、今回の廃止対象外とし変更していない
+  (`atoms is None`のガードのみ追加)。
+
+`--indir`解決の優先順位はユーザー指定通り`.cif` → `.pdb` → `.fasta`(既存の`.mmcif`は`.cif`と`.pdb`の
+間に維持、実質的に「`.cif`系を最優先、次に`.pdb`、最後に配列のみの`.fasta`」という意図を保つ)。
+
 ## 実装ファイル
 
 - `src/seqextract/chains.py` — 構造(Atomic)からの蛋白チェーン配列+残基番号の抽出(ProDy)
 - `src/structcompare/compare.py` — 構造間のチェーン単位配列比較(ProDy `matchChains`ラッパー)
 - `src/seqalign/pairwise.py` — 任意配列同士のペアワイズアラインメント(Biopython `PairwiseAligner`直接利用)
-- `src/structio/resolve.py` — `--indir`解決ロジック(`alignview`と共用)
+- `src/structio/resolve.py` — `--indir`解決ロジック(`alignview`と共用、対応拡張子は呼び出し元が指定)
+- `src/structio/fasta.py` — FASTAファイルの読み込み(Biopython `SeqIO`、アトミックな技術要素として分離)
 - `src/sequencealign/report.py` — レポート組み立て(sequencealign固有のドメインロジック)
 - `src/sequencealign/cli.py` — `pf sequence-align` サブコマンド
 
@@ -245,13 +287,15 @@ pytest tests/sequencealign tests/seqextract tests/structcompare tests/seqalign t
 
 ```bash
 pf sequence-align --indir data/cdk2 P24941_AF 1AQ1_ab 1HCL_a
-pf sequence-align --reference MENFQKV...PHLRL --indir data/cdk2 1AQ1_ab 1HCL_a
-# => reference行がAlignmentセクションに追加される
 pf sequence-align --indir data/braf P15056_AF 4MNF_ac --width 160
+pf sequence-align --indir data/mpro P0DTD1.fasta 6LU7_abc
+pf sequence-align --indir data/mpro P0DTD1 6LU7_abc
+# => 上記2つは同じ結果になる(P0DTD1.cif/.pdbが存在しないため.fastaに解決される)。
+#    P0DTD1:AがAlignmentセクションに他の構造と同じ行として加わる(reference専用の仕組みは廃止)。
 ```
 
-(出力セクション絞り込み前の動作例。BRAF(P15056)のAlphaFoldモデルと結晶構造4MNFを
+(`--reference`オプション廃止前の動作例。BRAF(P15056)のAlphaFoldモデルと結晶構造4MNFを
 `--reference P15056_AF:A`で比較すると既知の発がん性変異V600Eが正しく検出されることを確認した
-記録は、上記「`--reference`オプションの仕様」「実データでの検証結果」節参照。現在のレポート出力
-には含まれないが、`format_mutation_report()`自体は残っており
+記録は、上記「`--reference`オプションの仕様」「実データでの検証結果」節参照。現在のCLIには
+`--reference`はないが、`format_mutation_report()`自体はライブラリ関数として残っており
 `pytest tests/sequencealign -k format_mutation_report`で動作確認できる。)

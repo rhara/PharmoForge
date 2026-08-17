@@ -17,7 +17,7 @@ pf fetch <データ種別>=<識別子> --outdir <出力ディレクトリ>
   `,`区切りで複数可)をサポート。
 - `--outdir` / `-o` は必須。出力先ディレクトリを指定する。ファイル名は識別子から自動的に決まる
   (都度明示的にファイル名を指定する必要はない)。
-- `--type` (`cif`/`pdb`) は構造データのフォーマット指定に使う。省略時は`cif`。
+- `--type` (`cif`/`pdb`/`fasta`) は構造データのフォーマット指定に使う。省略時は`cif`。
 - `--af` (フラグ、`structure=`専用): 取得元をRCSB PDBからAlphaFold DBに切り替える。
   `activity=`と併用するとエラー。
 
@@ -46,7 +46,7 @@ pf fetch activity=CDK4_HUMAN --outdir data
   元の`molecule_chembl_id`・`target_chembl_id`・アッセイ関連の列(`standard_type`等)は出力しない。
 - 出力ファイル名は `<出力ディレクトリ>/<識別子>_activity.tsv`(上記の例では`data/CDK4_HUMAN_activity.tsv`)。
 
-### structure: 構造データ取得(単体・複数、RCSB PDB / AlphaFold DB)
+### structure: 構造データ取得(単体・複数、RCSB PDB / AlphaFold DB / UniProt)
 
 ```
 pf fetch structure=9CSK --type=cif --outdir data
@@ -54,9 +54,15 @@ pf fetch structure=6P8F,7SJ3,9CSK --type pdb --outdir data
 pf fetch structure=P61626 --af --type=cif --outdir data
 pf fetch structure=CDK1_HUMAN --af --type=cif --outdir data/cdk1
 pf fetch structure=P61626,CDK4_HUMAN --af --type pdb --outdir data
+pf fetch structure=9CSK --type=fasta --outdir data
+pf fetch structure=R1AB_SARS2 --type=fasta --outdir data
 ```
 
 - `<識別子>` はカンマ区切りで複数指定できる(区切りがなければ単体扱い)。
+- フォーマット(`cif`/`pdb`/`fasta`)は `--type` で指定する。省略時は`cif`。
+
+`--type`が`cif`/`pdb`の場合:
+
 - `--af`指定なし(既定): RCSB PDBのダウンロードエンドポイント
   `https://files.rcsb.org/download/{PDB_ID}.{fmt}` から取得する。`<識別子>`はPDB ID。
   出力ファイル名は `<出力ディレクトリ>/<識別子(大文字化)>.<fmt>`。
@@ -68,17 +74,34 @@ pf fetch structure=P61626,CDK4_HUMAN --af --type pdb --outdir data
   に`_AF`を付けたものを使う: `<出力ディレクトリ>/<accession>_AF.<fmt>`
   (例: `pf fetch structure=CDK1_HUMAN --af --type=cif --outdir data/cdk1` →
   `data/cdk1/O14519_AF.cif`)。
-- フォーマット(`cif`/`pdb`)は `--type` で指定する。省略時は`cif`。
+
+`--type=fasta`の場合(詳細な経緯は[設計変更の経緯](#---typefastaの追加構造ファイルに加えfasta配列も取得できるように)を参照):
+
+- RCSB/AlphaFold DBへは一切問い合わせず、常にUniProt本体
+  (`https://rest.uniprot.org/uniprotkb/{accession}.fasta`、`src/uniprot/entry.py`の`fetch_fasta()`)
+  から正規配列を直接取得する。`--af`は不要(付けても付けなくても結果は同じ)。
+- `<識別子>`がPDB IDの形式であれば、そのPDBエントリに紐づくUniProt accessionをRCSB Data API
+  (`data.rcsb.org`、`src/idmap/identifiers.py`の`pdb_id_to_uniprot_accessions()`)で解決する。
+  1つのPDBエントリに複数の蛋白質(複合体)が含まれる場合は、accessionごとに1ファイル取得する。
+- `<識別子>`がUniProt accessionの形式(`idmap.looks_like_uniprot_accession()`)、または`_`を含む
+  (entry nameの形式、例: `R1AB_SARS2`)場合は、UniProt識別子とみなし`resolve_uniprot_accession()`
+  で解決する。`--af`を明示的に付けた場合も常にこちらを使う。
+  (PDB IDは4文字で`_`を含まず、UniProt accessionとも形式が異なるため、この判別に曖昧さはない)
+- `--af`を指定した場合、fastaの取得元自体は変わらないため警告ログを出す(識別子解決は行われる)。
+- 出力ファイル名は常に `<出力ディレクトリ>/<UniProt accession>.fasta`(`_AF`は付けない。RCSB/AlphaFold DB
+  のどちらの経由でもなくUniProtから直接取得したものであることを表す)。
+  複数識別子をまたいで同じaccessionが重複解決された場合は1回だけ取得する。
 
 ## 実装ファイル
 
 - `src/fetcher/activities.py` — ChEMBL活性データの標準化+集約・TSV書き出し(fetcher固有の集計ロジック)
-- `src/fetcher/cli.py` — `pf fetch` サブコマンド(データ種別・`--af`フラグのディスパッチ)
+- `src/fetcher/cli.py` — `pf fetch` サブコマンド(データ種別・`--af`フラグ・`--type=fasta`のディスパッチ)
 - `src/chembl/activity.py` — ChEMBL活性データの生取得(アトミックな技術要素として分離)
-- `src/idmap/identifiers.py` — 蛋白識別子の相互マッピング(アトミックな技術要素として分離。`resolve_chembl_target_id()`は`activity=`、`resolve_uniprot_accession()`は`structure=`の`--af`指定時が使用。ダウンロード用accessionの解決と、出力ファイル名(`<accession>_AF.<fmt>`)にも同じaccessionを使う)
+- `src/idmap/identifiers.py` — 蛋白識別子の相互マッピング(アトミックな技術要素として分離。`resolve_chembl_target_id()`は`activity=`、`resolve_uniprot_accession()`は`structure=`の`--af`指定時、`pdb_id_to_uniprot_accessions()`は`structure=`の`--type=fasta`(`--af`なし)時が使用。ダウンロード用accessionの解決と、出力ファイル名(`<accession>_AF.<fmt>`)にも同じaccessionを使う)
 - `src/molstd/standardize.py` — 化合物構造の標準化(アトミックな技術要素として分離。`rdMolStandardize`のみの自前実装)
 - `src/rcsb/download.py` — RCSB PDB構造データ取得(アトミックな技術要素として分離)
-- `src/afdb/download.py` — AlphaFold DB構造データ取得(アトミックな技術要素として分離)
+- `src/afdb/download.py` — AlphaFold DB構造データ取得(アトミックな技術要素として分離。`--type=fasta`時のみUniProt本体からの取得に委譲する)
+- `src/uniprot/entry.py` — UniProtエントリ・配列の取得(アトミックな技術要素として分離。`fetch_fasta()`が`structure=` `--type=fasta`から使われる)
 
 ## 設計変更の経緯
 
@@ -131,6 +154,63 @@ protein 1、全く別の蛋白)が返り、`structure=CDK1_HUMAN --af`が誤っ�
 `UNIPROT_ENTRY_URL`と同種)はentry name/accessionのどちらを与えても該当accessionへ一意に解決される
 (存在しない識別子の場合はHTTP 400)ため、こちらを使うように変更した。あいまいさのある検索
 エンドポイントは`idmap`からは使わないようにした。
+
+### `--type=fasta`の追加(構造ファイルに加えFASTA配列も取得できるように)
+
+`--type`に`cif`/`pdb`に加え`fasta`を追加した。以下の3段階を経て現在の設計(fastaは常にUniProt本体
+から直接取得し、`--af`はデータ取得元には影響しない)に至った。
+
+**第1段階**: RCSB PDBは`files.rcsb.org/download`が`.fasta`拡張子に対応していないため、専用のfasta
+エンドポイント(`https://www.rcsb.org/fasta/entry/{PDB_ID}`)に切り替えて取得するようにした
+(`--af`指定時はAlphaFold DBのprediction APIレスポンスの`sequence`からFASTAを組み立てていた)。
+
+**第2段階**: `--af`指定時のfastaについて、ユーザーからの指摘で以下の問題が発覚した。
+
+- AlphaFold DBのモデルは全長ではなく断片(ドメイン単位)のことがある。実例:
+  `structure=R1AB_SARS2 --af --type=fasta`(SARS-CoV-2のreplicase polyprotein 1ab、
+  UniProt accession P0DTD1、全長7096残基)では、AlphaFold DBのprediction APIが返す
+  `sequence`が126残基の断片モデルのものになっており、全長配列を取得できなかった。
+- AlphaFold DBにモデルが存在しない識別子(`entries`が空)でも、UniProtエントリ自体は存在し
+  配列取得が可能なケースがあり、AlphaFold API依存では不要にエラーになっていた。
+
+これを受け、`--af`指定時のfastaはAlphaFold DBのprediction APIへは問い合わせず、UniProt本体の
+fastaエンドポイント(`https://rest.uniprot.org/uniprotkb/{accession}.fasta`、`src/uniprot/entry.py`の
+`fetch_fasta()`)から正規配列を直接取得する方式に変更した
+(`afdb.download.fetch_structure`内で`fmt == "fasta"`を最初に分岐)。
+
+**第3段階**: さらにユーザーから、「fastaはRCSB/AlphaFold DBという構造データベースとは無関係な
+概念であり、UniProtから取得するのが確実」という指摘を受け、`--af`の有無によらずfastaは常に
+UniProt本体から直接取得する設計に統一した。
+
+- `--af`指定なし(PDB ID指定)の場合も、それまでのRCSBのfastaエンドポイントではなく、PDB IDに
+  紐づくUniProt accessionを`idmap.pdb_id_to_uniprot_accessions()`(RCSB Data API `data.rcsb.org`で
+  ポリマーエンティティごとのUniProt cross-referenceを解決)で求めてからUniProt本体を叩くように
+  変更した。これに伴い`rcsb.download.fetch_structure`の`fasta`分岐は削除し、`cif`/`pdb`専用に戻した。
+  1つのPDBエントリに複数の蛋白質(複合体)が含まれる場合は、accessionごとに複数ファイルを出力する
+  (識別子1つに対しファイル1つという従来の前提が崩れるため、`fetcher/cli.py`側で`fmt == "fasta"`を
+  別経路にした)。
+- 出力ファイル名から`_AF`サフィックスを廃止し、常に`<UniProt accession>.fasta`にした
+  (RCSB由来でもAlphaFold DB由来でもなく、UniProt本体から直接取得したものであるため)。
+- `--af`はfastaのデータ取得元自体には影響しなくなった(常にUniProt)が、識別子の解決方法
+  (PDB IDとして解決するかUniProt識別子として解決するか)には引き続き影響する。ユーザーの提案により、
+  `--af --type=fasta`の組み合わせでは「取得元には影響しない」旨を警告ログとして出すようにした
+  (識別子解決自体は行うため処理は継続する)。
+
+**第4段階**: 第3段階の直後、`structure=R1AB_SARS2 --type=fasta`(`--af`なし)がエラーになる
+(識別子`R1AB_SARS2`をPDB IDとして`data.rcsb.org`に問い合わせてしまい404になる)という指摘を受けた。
+また、追加した警告ログ(`fetcher/cli.py`)が日本語だった点も指摘された
+(ログ出力は`core.logging_utils`のロガーを使う箇所は英語、`click.UsageError`やdocstringは日本語、
+という既存の使い分けに反していた)。以下の2点を修正した。
+
+- `--af`の有無で識別子の解釈を切り替えるのをやめ、識別子の形式から自動判別するようにした:
+  UniProt accessionの形式(`idmap.looks_like_uniprot_accession()`)に一致する、または`_`を含む
+  (entry nameの形式、例: `R1AB_SARS2`)場合はUniProt識別子として`resolve_uniprot_accession()`で
+  解決し、それ以外(PDB IDは4文字で`_`を含まず、UniProt accessionとも形式が異なる)はPDB IDとして
+  `pdb_id_to_uniprot_accessions()`で解決する(`fetcher/cli.py`)。これにより`--af`は完全に不要になった
+  (付けても付けなくても同じ結果になる。明示的に付けた場合は常にUniProt識別子として扱う経路を通す)。
+- `fetcher/cli.py`に追加した警告ログを英語に変更した(`--af has no effect on FASTA output ...`)。
+  同時に追加した`idmap.identifiers.pdb_id_to_uniprot_accessions()`内の`ValueError`メッセージも、
+  同ファイルの既存の`ValueError`(英語)との整合性のため英語に変更した。
 
 ## テスト
 

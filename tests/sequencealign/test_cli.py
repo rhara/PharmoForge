@@ -29,35 +29,37 @@ def test_sequence_align_prints_report_to_stdout(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert "== Pairwise identity ==" in result.output
-    assert "== Alignment (by residue number) ==" in result.output
+    assert "== Alignment (sequence-aligned) ==" in result.output  # --methodの既定は"align"
     # FASTA・Substitutionsセクションはユーザー要望により出力しない
     assert "== Sequences" not in result.output
     assert "== Substitutions" not in result.output
 
 
-def test_sequence_align_with_reference_structure_validates_but_adds_no_section(tmp_path):
+def test_sequence_align_method_number_uses_residue_number_alignment(tmp_path):
     p1 = tmp_path / "ref.pdb"
     p2 = tmp_path / "mut.pdb"
     _write_pdb(p1, _COMMON_RESNAMES)
     _write_pdb(p2, _COMMON_RESNAMES)
 
-    result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(p2), "--reference", "ref:A"])
+    result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(p2), "--method", "number"])
 
     assert result.exit_code == 0, result.output
-    assert "== Substitutions" not in result.output
+    assert "== Alignment (by residue number) ==" in result.output
 
 
-def test_sequence_align_with_reference_sequence_adds_row_to_alignment(tmp_path):
+def test_sequence_align_accepts_fasta_as_reference_row(tmp_path):
     p1 = tmp_path / "ref.pdb"
     _write_pdb(p1, _COMMON_RESNAMES)
+    fasta_path = tmp_path / "reference.fasta"
+    fasta_path.write_text(">reference\nGGGGAGGGGG\n")
 
-    result = CliRunner().invoke(sequence_align_cmd, [str(p1), "--reference", "GGGGAGGGGG"])
+    result = CliRunner().invoke(sequence_align_cmd, [str(p1), str(fasta_path)])
 
     assert result.exit_code == 0, result.output
-    assert "reference  GGGGAGGGGG" in result.output
+    assert "reference:A  GGGGAGGGGG" in result.output
 
 
-def test_sequence_align_rejects_unknown_reference_label(tmp_path):
+def test_sequence_align_rejects_unknown_reference_option(tmp_path):
     p1 = tmp_path / "ref.pdb"
     _write_pdb(p1, _COMMON_RESNAMES)
 
@@ -101,3 +103,19 @@ def test_sequence_align_width_option_controls_wrap_length(tmp_path):
     assert result.exit_code == 0, result.output
     assert "a:A  GGGGGGGGGG" in result.output
     assert "a:A  GGGGG\n" in result.output
+
+
+def test_sequence_align_method_align_aligns_domain_within_full_length_sequence(tmp_path):
+    # full: AAAAA + MENFQKVEKI(非反復ドメイン) + CCCCC(20残基)、domainは独立採番(1-10)。
+    fasta_path = tmp_path / "full.fasta"
+    fasta_path.write_text(">full\nAAAAAMENFQKVEKICCCCC\n")
+    domain_path = tmp_path / "domain.pdb"
+    _write_pdb(domain_path, ["MET", "GLU", "ASN", "PHE", "GLN", "LYS", "VAL", "GLU", "LYS", "ILE"], start=1)
+
+    result = CliRunner().invoke(
+        sequence_align_cmd, [str(fasta_path), str(domain_path), "--method", "align"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "== Alignment (sequence-aligned) ==" in result.output
+    assert "domain:A  -----MENFQKVEKI-----" in result.output

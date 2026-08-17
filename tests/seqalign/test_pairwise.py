@@ -9,6 +9,17 @@ def test_align_to_reference_finds_identical_sequence():
     assert result.identity == 100.0
     assert result.coverage == 100.0
     assert result.aligned_length == len(_REF)
+    assert result.query_by_ref_pos == {i + 1: c for i, c in enumerate(_REF)}
+
+
+def test_align_to_reference_query_by_ref_pos_places_domain_at_correct_offset():
+    # queryは基準配列の一部(11-20番目、1始まり)のみに対応する短いドメイン配列とみなす
+    domain = _REF[10:20]
+    result = align_to_reference(_REF, domain, list(range(1, len(domain) + 1)))
+
+    assert result.query_by_ref_pos == {i + 11: c for i, c in enumerate(domain)}
+    assert 1 not in result.query_by_ref_pos
+    assert 21 not in result.query_by_ref_pos
 
 
 def test_align_to_reference_finds_point_substitution():

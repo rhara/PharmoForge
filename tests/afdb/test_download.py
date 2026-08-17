@@ -10,6 +10,11 @@ API_RESPONSE = [
     }
 ]
 
+FASTA_CONTENT = (
+    b">sp|P61626|LYSC_HUMAN Lysozyme C OS=Homo sapiens OX=9606 GN=LYZ PE=1 SV=1\n"
+    b"MKALIVLGLVLLSVTVQGKVFERCELARTLKRLGMDGYRGISLANWMCLAKWESGYNTRA\n"
+)
+
 
 @patch("afdb.download.requests.get")
 def test_fetch_structure_infers_format_from_extension(mock_get, tmp_path):
@@ -54,6 +59,31 @@ def test_fetch_structure_raises_when_no_entry(mock_get, tmp_path):
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+@patch("afdb.download.requests.get")
+@patch("afdb.download.fetch_uniprot_fasta")
+def test_fetch_structure_fasta_uses_uniprot_directly(mock_fetch_fasta, mock_get, tmp_path):
+    mock_fetch_fasta.return_value = FASTA_CONTENT
+    output = tmp_path / "p61626.fasta"
+
+    download.fetch_structure("p61626", output, fmt="fasta")
+
+    mock_fetch_fasta.assert_called_once_with("P61626")
+    mock_get.assert_not_called()  # AlphaFold DBのprediction APIへは問い合わせない
+    assert output.read_bytes() == FASTA_CONTENT
+
+
+@patch("afdb.download.requests.get")
+@patch("afdb.download.fetch_uniprot_fasta")
+def test_fetch_structure_fasta_format_from_extension(mock_fetch_fasta, mock_get, tmp_path):
+    mock_fetch_fasta.return_value = FASTA_CONTENT
+    output = tmp_path / "p61626.fasta"
+
+    download.fetch_structure("p61626", output)
+
+    mock_fetch_fasta.assert_called_once_with("P61626")
+    mock_get.assert_not_called()
 
 
 @patch("afdb.download.requests.get")

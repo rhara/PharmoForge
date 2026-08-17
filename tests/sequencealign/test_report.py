@@ -4,6 +4,7 @@ from sequencealign.report import (
     _format_ruler,
     build_report,
     format_alignment_block,
+    format_alignment_block_by_sequence,
     format_fasta,
     format_identity_matrix,
     format_mutation_report,
@@ -16,6 +17,12 @@ _COMMON_SEQUENCE = "GGGGAGGGGG"
 # アラインメントの曖昧さを避けるため、ギャップ検出のテストには非反復配列を使う(MENFQKVEKI)
 _VARIED_RESNAMES = ["MET", "GLU", "ASN", "PHE", "GLN", "LYS", "VAL", "GLU", "LYS", "ILE"]
 _VARIED_SEQUENCE = "MENFQKVEKI"
+
+# P0DTD1(全長polyprotein)/6LU7(ローカル採番のMproドメインのみ)を模した組み合わせ:
+# 全長配列の中に非反復ドメイン配列を埋め込み、ドメイン側は独立した1始まりの残基番号を持つ。
+_DOMAIN_PREFIX = "AAAAA"
+_DOMAIN_SUFFIX = "CCCCC"
+_FULL_LENGTH_SEQUENCE = _DOMAIN_PREFIX + _VARIED_SEQUENCE + _DOMAIN_SUFFIX  # 20残基、ドメインは6-15
 
 
 def _atom_line(serial, resname, resseq, chain, x=0.0):
@@ -51,6 +58,17 @@ def structures_with_gap(tmp_path):
     _write_pdb(ref_path, _VARIED_RESNAMES, start=1)
     _write_pdb(gapped_path, _VARIED_RESNAMES[5:9], start=6)
     return load_labeled_structures([ref_path, gapped_path])
+
+
+@pytest.fixture
+def full_length_and_domain_only(tmp_path):
+    # P0DTD1(全長polyprotein FASTA)/6LU7(ローカル採番のMproドメインのみのPDB)を模す:
+    # full_pdbは全長配列(1-20)、domain_pdbは同じドメイン配列だが独立採番(1-10)を持つ。
+    fasta_path = tmp_path / "full.fasta"
+    fasta_path.write_text(f">full\n{_FULL_LENGTH_SEQUENCE}\n")
+    domain_path = tmp_path / "domain.pdb"
+    _write_pdb(domain_path, _VARIED_RESNAMES, start=1)
+    return load_labeled_structures([fasta_path, domain_path])
 
 
 def test_format_fasta_lists_all_chains(two_structures):
@@ -99,29 +117,23 @@ def test_format_mutation_report_unknown_structure_label_raises(two_structures):
 
 
 def test_build_report_includes_pairwise_identity_and_alignment_only(two_structures):
-    report = build_report(two_structures, reference="ref:A")
+    report = build_report(two_structures)
 
     assert "== Pairwise identity ==" in report
-    assert "== Alignment (by residue number) ==" in report
+    assert "== Alignment (sequence-aligned) ==" in report  # method既定は"align"
     # FASTA・Substitutionsセクションはユーザー要望により出力しない
     assert "== Sequences" not in report
     assert "== Substitutions" not in report
 
 
-def test_build_report_includes_reference_row_when_sequence_reference_given(two_structures):
-    report = build_report(two_structures, reference=_COMMON_SEQUENCE)
+def test_build_report_includes_fasta_input_as_alignment_row(two_structures, tmp_path):
+    fasta_path = tmp_path / "reference.fasta"
+    fasta_path.write_text(f">reference\n{_COMMON_SEQUENCE}\n")
+    structures = two_structures + load_labeled_structures([fasta_path])
 
-    assert "reference  " in report
+    report = build_report(structures)
 
-
-def test_build_report_raises_for_unknown_reference_label(two_structures):
-    with pytest.raises(ValueError):
-        build_report(two_structures, reference="nonexistent:A")
-
-
-def test_build_report_raises_for_invalid_reference_sequence(two_structures):
-    with pytest.raises(ValueError):
-        build_report(two_structures, reference="not-a-sequence-or-ref")
+    assert "reference:A" in report
 
 
 def test_format_mutation_report_vs_structure_shows_gap(structures_with_gap):
@@ -145,22 +157,44 @@ def test_format_alignment_block_lines_up_by_resnum(structures_with_gap):
     assert "gapped:A  -----KVEK-" in block
 
 
-def test_format_alignment_block_includes_sequence_reference_row(structures_with_gap):
-    block = format_alignment_block(structures_with_gap, reference=_VARIED_SEQUENCE)
+def test_format_alignment_block_includes_fasta_input_row(structures_with_gap, tmp_path):
+    fasta_path = tmp_path / "reference.fasta"
+    fasta_path.write_text(f">reference\n{_VARIED_SEQUENCE}\n")
+    structures = structures_with_gap + load_labeled_structures([fasta_path])
 
-    assert "reference  MENFQKVEKI" in block
-    assert "ref:A      MENFQKVEKI" in block
-    assert "gapped:A   -----KVEK-" in block
+    block = format_alignment_block(structures)
+
+    assert "reference:A  MENFQKVEKI" in block
+    assert "ref:A        MENFQKVEKI" in block
+    assert "gapped:A     -----KVEK-" in block
 
 
-def test_format_alignment_block_does_not_duplicate_structure_reference(structures_with_gap):
-    # ラベル:チェーンID基準の場合、そのチェーンはすでにstructures側の行として
-    # 含まれているため、reference用の行を別途追加しない。
-    block_without_ref = format_alignment_block(structures_with_gap)
-    block_with_ref = format_alignment_block(structures_with_gap, reference="ref:A")
+def test_format_alignment_block_misaligns_mismatched_numbering(full_length_and_domain_only):
+    # 番号ベースでは、ドメイン側のローカル採番(1-10)が全長配列の先頭(1-10、AAAAAMENFQ)と
+    # そのまま重なってしまい、ドメイン本来の位置(6-15)には並ばない(既知の制約)。
+    block = format_alignment_block(full_length_and_domain_only)
 
-    assert block_without_ref == block_with_ref
-    assert "reference " not in block_with_ref
+    assert "full:A    AAAAAMENFQKVEKICCCCC" in block
+    assert "domain:A  MENFQKVEKI----------" in block
+
+
+def test_format_alignment_block_by_sequence_aligns_domain_at_correct_offset(full_length_and_domain_only):
+    # 配列アラインメントベースでは、ドメインの配列が全長配列内の本来の位置(6-15)に
+    # 正しく並ぶ(先頭の構造=fullが基準)。
+    block = format_alignment_block_by_sequence(full_length_and_domain_only)
+
+    assert "full:A    AAAAAMENFQKVEKICCCCC" in block
+    assert "domain:A  -----MENFQKVEKI-----" in block
+
+
+def test_format_alignment_block_by_sequence_empty_when_no_chains(tmp_path):
+    path = tmp_path / "water.pdb"
+    path.write_text(
+        "HETATM    1  O   HOH A   1       0.000   0.000   0.000  1.00  0.00           O\nEND\n"
+    )
+    structures = load_labeled_structures([path])
+
+    assert format_alignment_block_by_sequence(structures) == "(no protein chains found)\n"
 
 
 def test_format_ruler_places_number_and_tick_at_multiples_of_ten():
@@ -190,6 +224,65 @@ def test_format_ruler_left_aligns_number_that_would_overflow_left_edge():
     assert ticks[1] == "|"
     assert numbers[9:12] == "460"
     assert ticks[11] == "|"
+
+
+def test_load_labeled_structures_reads_single_record_fasta(tmp_path):
+    fasta_path = tmp_path / "P0DTD1.fasta"
+    fasta_path.write_text(">sp|P0DTD1|R1AB_SARS2 Replicase polyprotein 1ab\nMENFQKVEKI\n")
+
+    structures = load_labeled_structures([fasta_path])
+
+    assert len(structures) == 1
+    s = structures[0]
+    assert s.label == "P0DTD1"
+    assert s.atoms is None
+    assert len(s.chains) == 1
+    assert s.chains[0].chain_id == "A"
+    assert s.chains[0].sequence == "MENFQKVEKI"
+    assert s.chains[0].resnums == list(range(1, 11))
+
+
+def test_load_labeled_structures_reads_multi_record_fasta(tmp_path):
+    fasta_path = tmp_path / "complex.fasta"
+    fasta_path.write_text(">chain1\nGGGGAGGGGG\n>chain2\nMENFQKVEKI\n")
+
+    structures = load_labeled_structures([fasta_path])
+
+    assert len(structures) == 1
+    chains = structures[0].chains
+    assert [c.chain_id for c in chains] == ["A", "B"]
+    assert chains[0].sequence == "GGGGAGGGGG"
+    assert chains[1].sequence == "MENFQKVEKI"
+
+
+def test_format_identity_matrix_skips_fasta_only_pairs(two_structures, tmp_path):
+    fasta_path = tmp_path / "seqonly.fasta"
+    fasta_path.write_text(f">seqonly\n{_COMMON_SEQUENCE}\n")
+    structures = two_structures + load_labeled_structures([fasta_path])
+
+    matrix = format_identity_matrix(structures)
+
+    assert "seqonly" not in matrix
+    assert "ref:A  vs  mut:A" in matrix  # 実構造同士の組は引き続き比較される
+
+
+def test_format_mutation_report_vs_structure_rejects_fasta_reference(two_structures, tmp_path):
+    fasta_path = tmp_path / "seqonly.fasta"
+    fasta_path.write_text(f">seqonly\n{_COMMON_SEQUENCE}\n")
+    structures = two_structures + load_labeled_structures([fasta_path])
+
+    with pytest.raises(ValueError):
+        format_mutation_report(structures, "seqonly:A")
+
+
+def test_format_mutation_report_vs_structure_notes_fasta_only_target(two_structures, tmp_path):
+    fasta_path = tmp_path / "seqonly.fasta"
+    fasta_path.write_text(f">seqonly\n{_COMMON_SEQUENCE}\n")
+    structures = two_structures + load_labeled_structures([fasta_path])
+
+    report = format_mutation_report(structures, "ref:A")
+
+    assert "seqonly: no atomic structure (loaded from FASTA)" in report
 
 
 def test_format_alignment_block_includes_ruler(structures_with_gap):
@@ -229,6 +322,19 @@ def test_format_alignment_block_empty_when_no_chains(tmp_path):
 
 
 def test_build_report_includes_alignment_block(two_structures):
-    report = build_report(two_structures, reference=None)
+    report = build_report(two_structures)
+
+    assert "== Alignment (sequence-aligned) ==" in report  # method既定は"align"
+
+
+def test_build_report_method_number_uses_residue_number_alignment(two_structures):
+    report = build_report(two_structures, method="number")
 
     assert "== Alignment (by residue number) ==" in report
+
+
+def test_build_report_method_align_uses_sequence_alignment(full_length_and_domain_only):
+    report = build_report(full_length_and_domain_only, method="align")
+
+    assert "== Alignment (sequence-aligned) ==" in report
+    assert "domain:A  -----MENFQKVEKI-----" in report

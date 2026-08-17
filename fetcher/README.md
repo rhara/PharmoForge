@@ -34,12 +34,12 @@ SMILESがパースできない、またはpChEMBL値が欠損している記録�
 
 ### 構造データの取得(RCSB PDB / AlphaFold DB)
 
-`--type`(`cif`/`pdb`)でフォーマットを指定する(省略時は`cif`)。
-既定の取得元はRCSB PDB(識別子はPDB ID)。`--af`を付けるとAlphaFold DB(識別子はUniProt
-entry name(例: `TYK2_HUMAN`)またはaccession(例: `P29597`)のいずれでもよい。ダウンロード用の
+`--type`(`cif`/`pdb`/`fasta`)でフォーマットを指定する(省略時は`cif`)。
+`cif`/`pdb`の既定の取得元はRCSB PDB(識別子はPDB ID)。`--af`を付けるとAlphaFold DB(識別子は
+UniProt entry name(例: `TYK2_HUMAN`)またはaccession(例: `P29597`)のいずれでもよい。ダウンロード用の
 accessionは内部で`idmap.resolve_uniprot_accession`により解決される)から取得する。
 
-識別子はカンマ区切りで複数指定できる(区切りがなければ単体扱い)。各ファイルは
+識別子はカンマ区切りで複数指定できる(区切りがなければ単体扱い)。`cif`/`pdb`の各ファイルは
 `<出力ディレクトリ>/<識別子>.<拡張子>`として保存される。ただし`--af`指定時はファイル名に
 UniProt accession(識別子にentry nameを与えた場合でも、内部で`idmap.resolve_uniprot_accession`
 により解決したaccession)に`_AF`を付けたものを使う。
@@ -54,6 +54,35 @@ pf fetch structure=P61626,CDK4_HUMAN --af --type pdb --outdir data
 
 `structure=P61626 --af`は`data/P61626_AF.cif`として、
 `structure=CDK1_HUMAN --af`は`data/cdk1/O14519_AF.cif`(entry nameから解決したaccession)として保存される。
+
+#### `--type=fasta`: UniProt本体から直接配列を取得
+
+`--type=fasta`は`--af`の有無によらず常にUniProt本体(`https://rest.uniprot.org/uniprotkb/{accession}.fasta`)
+から正規配列を直接取得する。RCSB/AlphaFold DBへは問い合わせない(RCSBの構造ファイルに含まれる配列は
+発現タグ等で正規配列と異なることがあり、AlphaFold DBのモデルは全長ではなく断片のことがあるため)。
+
+`--af`は不要(付けても付けなくても結果は同じ)。識別子の形式から自動的にPDB IDかUniProt識別子かを
+判別する(UniProt accessionの形式に一致する、またはentry nameの形式("_"を含む)であればUniProt識別子、
+それ以外はPDB IDとみなす)。
+
+- PDB ID(例: `9CSK`)の場合: そのPDBエントリに紐づくUniProt accessionをRCSB Data APIで自動解決して
+  から取得する(複合体で複数の蛋白質が含まれる場合は、それぞれについて1ファイルずつ取得する)。
+- UniProt entry name(例: `R1AB_SARS2`)/accession(例: `P61626`)の場合: `idmap.resolve_uniprot_accession()`
+  でそのまま解決する。
+- `--af`を明示的に付けた場合は常にUniProt識別子として扱う(`cif`/`pdb`と同じ解決方法を強制する)。
+  ただしfastaの取得元自体は変わらないため、指定すると警告ログを出す。
+- 出力ファイル名は常に`<出力ディレクトリ>/<UniProt accession>.fasta`(`_AF`は付けない)。
+
+```bash
+pf fetch structure=9CSK --type=fasta --outdir data
+pf fetch structure=R1AB_SARS2 --type=fasta --outdir data
+pf fetch structure=P61626 --type=fasta --outdir data
+```
+
+`structure=9CSK --type=fasta`は、9CSKに含まれる2つの蛋白質(Cyclin D1: P24385、CDK4: P11802)
+それぞれについて`data/P24385.fasta`・`data/P11802.fasta`を生成する。
+`structure=R1AB_SARS2 --type=fasta`は`R1AB_SARS2`をUniProt entry nameとして解決し、
+`data/P0DTD1.fasta`を生成する(`--af`は不要)。
 
 ## 関数一覧
 

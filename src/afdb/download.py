@@ -5,6 +5,7 @@ from pathlib import Path
 import requests
 
 from core.logging_utils import get_logger
+from uniprot import fetch_fasta as fetch_uniprot_fasta
 
 logger = get_logger(__name__)
 
@@ -14,40 +15,47 @@ AFDB_API_URL = "https://alphafold.ebi.ac.uk/api/prediction/{accession}"
 def fetch_structure(accession: str, output: Path, fmt: str | None = None) -> None:
     """UniProt accession(例: P61626)のAlphaFold DB予測構造をダウンロードしoutputへ保存する。
 
-    fmt(cif/pdb)を省略した場合は、outputの拡張子(.cif / .pdb)から決める。
-    どちらもなければcif。
-    ダウンロードURLはAlphaFold DBのpredictionエンドポイントから都度解決する
-    (バージョン番号をURLに固定で埋め込まない)。
+    fmt(cif/pdb/fasta)を省略した場合は、outputの拡張子(.cif / .pdb / .fasta)から決める。
+    いずれもなければcif。AlphaFold DBにはFASTA専用のダウンロードURLがなく、また
+    AlphaFold DBのモデルは断片(ドメイン単位)のことがあり全長配列と一致しない場合があるため、
+    fastaは`src/uniprot`経由でUniProt本体の正規配列を直接取得する
+    (AlphaFold DBのprediction APIへは問い合わせない)。
+    構造ファイル(cif/pdb)のダウンロードURLはAlphaFold DBのpredictionエンドポイントから
+    都度解決する(バージョン番号をURLに固定で埋め込まない)。
     """
     accession = accession.strip().upper()
     fmt = (fmt or output.suffix.lstrip(".") or "cif").lower()
 
-    logger.info("Resolving AlphaFold DB entry for %s ...", accession)
-    api_url = AFDB_API_URL.format(accession=accession)
-    resp = requests.get(api_url, timeout=60)
-    resp.raise_for_status()
-    entries = resp.json()
-    if not entries:
-        raise ValueError(f"AlphaFold DBに予測構造が見つかりません: {accession}")
-    entry = entries[0]
+    if fmt == "fasta":
+        content = fetch_uniprot_fasta(accession)
+    else:
+        logger.info("Resolving AlphaFold DB entry for %s ...", accession)
+        api_url = AFDB_API_URL.format(accession=accession)
+        resp = requests.get(api_url, timeout=60)
+        resp.raise_for_status()
+        entries = resp.json()
+        if not entries:
+            raise ValueError(f"AlphaFold DBに予測構造が見つかりません: {accession}")
+        entry = entries[0]
 
-    url_key = "cifUrl" if fmt == "cif" else "pdbUrl"
-    structure_url = entry.get(url_key)
-    if not structure_url:
-        raise ValueError(f"AlphaFold DBのレスポンスに{url_key}がありません: {accession}")
+        url_key = "cifUrl" if fmt == "cif" else "pdbUrl"
+        structure_url = entry.get(url_key)
+        if not structure_url:
+            raise ValueError(f"AlphaFold DBのレスポンスに{url_key}がありません: {accession}")
 
-    logger.info(
-        "Downloading structure %s (%s, v%s) from AlphaFold DB ...",
-        accession,
-        fmt,
-        entry.get("latestVersion"),
-    )
-    struct_resp = requests.get(structure_url, timeout=60)
-    struct_resp.raise_for_status()
+        logger.info(
+            "Downloading structure %s (%s, v%s) from AlphaFold DB ...",
+            accession,
+            fmt,
+            entry.get("latestVersion"),
+        )
+        struct_resp = requests.get(structure_url, timeout=60)
+        struct_resp.raise_for_status()
+        content = struct_resp.content
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(struct_resp.content)
-    logger.info("Done: saved %s (%d bytes) to %s", accession, len(struct_resp.content), output)
+    output.write_bytes(content)
+    logger.info("Done: saved %s (%d bytes) to %s", accession, len(content), output)
 
 
 def fetch_structures(accessions: list[str], output_dir: Path, fmt: str) -> None:

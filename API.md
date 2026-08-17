@@ -33,6 +33,7 @@
 | `accession_to_chembl_target_id(accession: str) -> str` | UniProt accessionをChEMBL target id(例: `CHEMBL331`)に変換する(ChEMBL REST APIを使用)。 |
 | `resolve_chembl_target_id(identifier: str) -> str` | UniProt entry name / accession / ChEMBL target idのいずれを与えてもChEMBL target idを返す(上記3関数を組み合わせた入口)。 |
 | `resolve_uniprot_accession(identifier: str) -> str` | UniProt entry name / accessionのいずれを与えてもUniProt accessionを返す(`fetcher`の`structure=` `--af`指定時、ダウンロード用accessionと出力ファイル名(`<accession>_AF.<fmt>`)の両方の解決に使用)。 |
+| `pdb_id_to_uniprot_accessions(pdb_id: str) -> list[str]` | PDB ID配下の全ポリマーエンティティに紐づくUniProt accessionを重複なく出現順で返す(RCSB Data API `data.rcsb.org`を使用)。複合体で複数の蛋白質が含まれる場合は複数返る。`fetcher`の`structure=` `--type=fasta`(`--af`なし)時、PDB IDからUniProt accessionを解決するのに使用。 |
 
 ## `src/chembl`
 
@@ -75,7 +76,7 @@ AlphaFold DBからの蛋白予測構造ファイルダウンロード。
 
 | 関数 | 説明 |
 | --- | --- |
-| `fetch_structure(accession: str, output: Path, fmt: str \| None = None) -> None` | UniProt accessionの構造ファイルを1件ダウンロードし`output`に保存する。`fmt`(`cif`/`pdb`)省略時は`output`の拡張子から推定(既定`cif`)。ダウンロードURLはAlphaFold DBのpredictionエンドポイント(`https://alphafold.ebi.ac.uk/api/prediction/{accession}`)から都度解決する(バージョンをURLに固定しない)。 |
+| `fetch_structure(accession: str, output: Path, fmt: str \| None = None) -> None` | UniProt accessionの構造ファイルを1件ダウンロードし`output`に保存する。`fmt`(`cif`/`pdb`/`fasta`)省略時は`output`の拡張子から推定(既定`cif`)。`cif`/`pdb`のダウンロードURLはAlphaFold DBのpredictionエンドポイント(`https://alphafold.ebi.ac.uk/api/prediction/{accession}`)から都度解決する(バージョンをURLに固定しない)。`fasta`指定時はAlphaFold DBへは問い合わせず、[`src/uniprot`](#srcuniprot)の`fetch_fasta()`でUniProt本体から正規配列を直接取得する(AlphaFold DBのモデルは断片のことがあるため)。 |
 | `fetch_structures(accessions: list[str], output_dir: Path, fmt: str) -> None` | 複数のUniProt accessionをまとめてダウンロードし、`output_dir/<ACCESSION>.<fmt>`として保存する。 |
 
 ## `src/uniprot`
@@ -87,6 +88,7 @@ UniProtエントリの取得と、創薬(構造生物学・メディシナルケ
 | 関数 | 説明 |
 | --- | --- |
 | `fetch_entry(accession: str) -> dict` | UniProt accessionの生エントリJSON(UniProt REST API)を取得する。 |
+| `fetch_fasta(accession: str) -> bytes` | UniProt accessionの正規配列をUniProt標準のFASTA形式(`https://rest.uniprot.org/uniprotkb/{accession}.fasta`)で取得する。 |
 | `extract_protein_info(entry: dict) -> dict` | 生エントリJSONから創薬関連情報を平坦なdictに整理する。抽出項目: `accession`/`entry_name`/`protein_name`/`gene_name`/`organism`/`taxon_id`/`sequence`/`length`/`mol_weight`/`ec_numbers`/`function`/`keywords`/`diseases`/`active_sites`/`binding_sites`/`disulfide_bonds`/`glycosylation_sites`/`modified_residues`/`transmembrane_regions`/`signal_peptide`/`domains`/`pdb_structures`(id/method/resolution)/`alphafold_id`。 |
 | `fetch_protein_info(accession: str) -> dict` | `fetch_entry` + `extract_protein_info` をまとめた入口。 |
 
@@ -129,7 +131,13 @@ PDB/CIF構造ファイルの読み書き(拡張子で自動判別、[ProDy](http
 
 | 関数 | 説明 |
 | --- | --- |
-| `resolve_structure_tokens(tokens: tuple[str, ...]) -> list[Path]` | `click`の`UNPROCESSED`引数列を構造ファイルパスのリストに解決する。`--indir DIR`は繰り返し指定可能で、以降のファイル名(拡張子省略可、`.cif`優先、次に`.mmcif`/`.pdb`)を`DIR`配下から解決する。`/`を含む指定(または絶対パス)は`--indir`によらずカレントディレクトリ相対 or 絶対パスとして扱う。トークンが空、または`--indir`に値がない場合は`click.UsageError`。 |
+| `resolve_structure_tokens(tokens: tuple[str, ...], extensions: tuple[str, ...] = (".cif", ".mmcif", ".pdb")) -> list[Path]` | `click`の`UNPROCESSED`引数列を構造ファイルパスのリストに解決する。`--indir DIR`は繰り返し指定可能で、以降のファイル名(拡張子省略可、`extensions`の順で試す)を`DIR`配下から解決する。`extensions`は呼び出し元ごとに変更でき、`sequencealign`は`(".cif", ".mmcif", ".pdb", ".fasta")`を渡す(`alignview`はPyMOLでの3次元表示が前提のため既定のまま)。`/`を含む指定(または絶対パス)は`--indir`によらずカレントディレクトリ相対 or 絶対パスとして扱う。トークンが空、または`--indir`に値がない場合は`click.UsageError`。 |
+
+### `structio.fasta`
+
+| 関数 | 説明 |
+| --- | --- |
+| `parse_fasta(path: Path) -> list[tuple[str, str]]` | FASTAファイルをBiopython `SeqIO`で読み込み、`(ヘッダー, 配列)`のタプルのリストを返す。`sequencealign`が`.fasta`入力の配列読み込みに使う。 |
 
 ## `src/structfit`
 

@@ -4,10 +4,18 @@ import click
 
 from afdb import fetch_structure as fetch_af_structure
 from chembl import fetch_activities
-from idmap import resolve_chembl_target_id, resolve_uniprot_accession
+from core.logging_utils import get_logger
+from idmap import (
+    looks_like_uniprot_accession,
+    pdb_id_to_uniprot_accessions,
+    resolve_chembl_target_id,
+    resolve_uniprot_accession,
+)
 from rcsb import fetch_structure
 
 from . import activities
+
+logger = get_logger(__name__)
 
 SUPPORTED_TYPES = ("activity", "structure")
 
@@ -32,7 +40,7 @@ SUPPORTED_TYPES = ("activity", "structure")
 @click.option(
     "--type",
     "fmt",
-    type=click.Choice(["cif", "pdb"], case_sensitive=False),
+    type=click.Choice(["cif", "pdb", "fasta"], case_sensitive=False),
     default="cif",
     show_default=True,
     help="構造ファイルのフォーマット(structure=用)。",
@@ -41,14 +49,21 @@ def fetch_cmd(spec: str, af: bool, outdir: Path, fmt: str):
     """データを取得する。SPECは <データ種別>=<識別子> の形式。
 
     出力先は常に--outdir/-oで指定するディレクトリで、ファイル名は識別子から自動的に決まる
-    (activity=は`<識別子>_activity.tsv`、structure=は`<識別子>.<fmt>`。--af指定時はUniProt
-    accessionに`_AF`を付けたものをファイル名に使う)。
+    (activity=は`<識別子>_activity.tsv`、structure=は`<識別子>.<fmt>`。--af指定時(--type=fastaを除く)は
+    UniProt accessionに`_AF`を付けたものをファイル名に使う)。
+
+    --type=fastaは常にUniProt本体から直接配列を取得し、`<UniProt accession>.fasta`として保存する
+    (`_AF`は付けない)。--afの指定は不要: 識別子がPDB ID(例: `9CSK`)ならそのPDBエントリに紐づく
+    UniProt accession(複合体の場合は複数)を自動解決し、UniProt entry name/accession(例:
+    `R1AB_SARS2`、`P61626`)ならそのまま解決する。
 
     \b
     例:
       pf fetch activity=CDK4_HUMAN --outdir data
       pf fetch structure=9CSK --type=cif --outdir data
       pf fetch structure=6P8F,7SJ3,9CSK --type pdb --outdir data
+      pf fetch structure=9CSK --type=fasta --outdir data
+      pf fetch structure=R1AB_SARS2 --type=fasta --outdir data
       pf fetch structure=P61626 --af --type=cif --outdir data
       pf fetch structure=TYK2_HUMAN --af --type=cif --outdir data
       pf fetch structure=P61626,CDK4_HUMAN --af --type pdb --outdir data
@@ -73,12 +88,30 @@ def fetch_cmd(spec: str, af: bool, outdir: Path, fmt: str):
         identifiers = [x.strip() for x in value.split(",") if x.strip()]
         if not identifiers:
             raise click.UsageError(f"構造IDが指定されていません: {spec!r}")
-        for identifier in identifiers:
+        if fmt == "fasta":
             if af:
-                accession = resolve_uniprot_accession(identifier)
-                fetch_af_structure(accession, outdir / f"{accession}_AF.{fmt}", fmt=fmt)
-            else:
-                fetch_structure(identifier, outdir / f"{identifier.upper()}.{fmt}", fmt=fmt)
+                logger.warning(
+                    "--af has no effect on FASTA output (fasta is always fetched directly "
+                    "from UniProt, and --af is not required to resolve entry names either)."
+                )
+            accessions: list[str] = []
+            for identifier in identifiers:
+                if af or looks_like_uniprot_accession(identifier) or "_" in identifier:
+                    candidates = [resolve_uniprot_accession(identifier)]
+                else:
+                    candidates = pdb_id_to_uniprot_accessions(identifier)
+                for accession in candidates:
+                    if accession not in accessions:
+                        accessions.append(accession)
+            for accession in accessions:
+                fetch_af_structure(accession, outdir / f"{accession}.fasta", fmt="fasta")
+        else:
+            for identifier in identifiers:
+                if af:
+                    accession = resolve_uniprot_accession(identifier)
+                    fetch_af_structure(accession, outdir / f"{accession}_AF.{fmt}", fmt=fmt)
+                else:
+                    fetch_structure(identifier, outdir / f"{identifier.upper()}.{fmt}", fmt=fmt)
     else:
         raise click.UsageError(
             f"未対応のデータ種別です: {data_type!r} (対応: {', '.join(SUPPORTED_TYPES)})"

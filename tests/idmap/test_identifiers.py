@@ -68,3 +68,67 @@ def test_resolve_chembl_target_id_from_accession(mock_acc):
 @patch("idmap.identifiers.entry_name_to_accession", return_value="P11802")
 def test_resolve_chembl_target_id_from_entry_name(mock_entry, mock_acc):
     assert identifiers.resolve_chembl_target_id("CDK4_HUMAN") == "CHEMBL331"
+
+
+@patch("idmap.identifiers.requests.get")
+def test_pdb_id_to_uniprot_accessions_single_entity(mock_get):
+    entry_resp = MagicMock(raise_for_status=lambda: None)
+    entry_resp.json.return_value = {
+        "rcsb_entry_container_identifiers": {"polymer_entity_ids": ["1"]}
+    }
+    entity_resp = MagicMock(raise_for_status=lambda: None)
+    entity_resp.json.return_value = {
+        "rcsb_polymer_entity_container_identifiers": {"uniprot_ids": ["P61626"]}
+    }
+    mock_get.side_effect = [entry_resp, entity_resp]
+
+    result = identifiers.pdb_id_to_uniprot_accessions("6p8f")
+
+    assert result == ["P61626"]
+    called_urls = [c.args[0] for c in mock_get.call_args_list]
+    assert called_urls == [
+        "https://data.rcsb.org/rest/v1/core/entry/6P8F",
+        "https://data.rcsb.org/rest/v1/core/polymer_entity/6P8F/1",
+    ]
+
+
+@patch("idmap.identifiers.requests.get")
+def test_pdb_id_to_uniprot_accessions_multiple_entities_deduped(mock_get):
+    entry_resp = MagicMock(raise_for_status=lambda: None)
+    entry_resp.json.return_value = {
+        "rcsb_entry_container_identifiers": {"polymer_entity_ids": ["1", "2", "3"]}
+    }
+    entity1_resp = MagicMock(raise_for_status=lambda: None)
+    entity1_resp.json.return_value = {
+        "rcsb_polymer_entity_container_identifiers": {"uniprot_ids": ["P24385"]}
+    }
+    entity2_resp = MagicMock(raise_for_status=lambda: None)
+    entity2_resp.json.return_value = {
+        "rcsb_polymer_entity_container_identifiers": {"uniprot_ids": ["P11802"]}
+    }
+    entity3_resp = MagicMock(raise_for_status=lambda: None)
+    entity3_resp.json.return_value = {
+        "rcsb_polymer_entity_container_identifiers": {"uniprot_ids": ["P11802"]}
+    }
+    mock_get.side_effect = [entry_resp, entity1_resp, entity2_resp, entity3_resp]
+
+    result = identifiers.pdb_id_to_uniprot_accessions("9csk")
+
+    assert result == ["P24385", "P11802"]
+
+
+@patch("idmap.identifiers.requests.get")
+def test_pdb_id_to_uniprot_accessions_raises_when_none_found(mock_get):
+    entry_resp = MagicMock(raise_for_status=lambda: None)
+    entry_resp.json.return_value = {
+        "rcsb_entry_container_identifiers": {"polymer_entity_ids": ["1"]}
+    }
+    entity_resp = MagicMock(raise_for_status=lambda: None)
+    entity_resp.json.return_value = {"rcsb_polymer_entity_container_identifiers": {}}
+    mock_get.side_effect = [entry_resp, entity_resp]
+
+    try:
+        identifiers.pdb_id_to_uniprot_accessions("1abc")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
