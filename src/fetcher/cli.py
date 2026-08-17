@@ -26,8 +26,8 @@ SUPPORTED_TYPES = ("activity", "structure")
     "--af",
     is_flag=True,
     default=False,
-    help="structure=の取得元をAlphaFold DBにする(既定はRCSB PDB)。"
-    "識別子はUniProt entry name/accessionを指定する。",
+    help="Fetch structure= from AlphaFold DB instead of the default RCSB PDB. "
+    "The identifier must be a UniProt entry name/accession.",
 )
 @click.option(
     "--outdir",
@@ -35,7 +35,7 @@ SUPPORTED_TYPES = ("activity", "structure")
     "outdir",
     required=True,
     type=click.Path(path_type=Path, file_okay=False),
-    help="出力先ディレクトリ。ファイル名は識別子から自動的に決まる。",
+    help="Output directory. The file name is derived automatically from the identifier.",
 )
 @click.option(
     "--type",
@@ -43,22 +43,24 @@ SUPPORTED_TYPES = ("activity", "structure")
     type=click.Choice(["cif", "pdb", "fasta"], case_sensitive=False),
     default="cif",
     show_default=True,
-    help="構造ファイルのフォーマット(structure=用)。",
+    help="Structure file format (for structure=).",
 )
 def fetch_cmd(spec: str, af: bool, outdir: Path, fmt: str):
-    """データを取得する。SPECは <データ種別>=<識別子> の形式。
+    """Fetch data. SPEC has the form <data type>=<identifier>.
 
-    出力先は常に--outdir/-oで指定するディレクトリで、ファイル名は識別子から自動的に決まる
-    (activity=は`<識別子>_activity.tsv`、structure=は`<識別子>.<fmt>`。--af指定時(--type=fastaを除く)は
-    UniProt accessionに`_AF`を付けたものをファイル名に使う)。
+    The output always goes to the directory given by --outdir/-o, with the file name derived
+    automatically from the identifier (activity= produces `<identifier>_activity.tsv`,
+    structure= produces `<identifier>.<fmt>`. With --af (except --type=fasta), the file name
+    uses the UniProt accession with `_AF` appended).
 
-    --type=fastaは常にUniProt本体から直接配列を取得し、`<UniProt accession>.fasta`として保存する
-    (`_AF`は付けない)。--afの指定は不要: 識別子がPDB ID(例: `9CSK`)ならそのPDBエントリに紐づく
-    UniProt accession(複合体の場合は複数)を自動解決し、UniProt entry name/accession(例:
-    `R1AB_SARS2`、`P61626`)ならそのまま解決する。
+    --type=fasta always fetches the sequence directly from UniProt itself and saves it as
+    `<UniProt accession>.fasta` (no `_AF` suffix). --af is not needed: if the identifier is a
+    PDB ID (e.g. `9CSK`), the UniProt accession(s) linked to that PDB entry are resolved
+    automatically (multiple for complexes); a UniProt entry name/accession (e.g. `R1AB_SARS2`,
+    `P61626`) is resolved as-is.
 
     \b
-    例:
+    Examples:
       pf fetch activity=CDK4_HUMAN --outdir data
       pf fetch structure=9CSK --type=cif --outdir data
       pf fetch structure=6P8F,7SJ3,9CSK --type pdb --outdir data

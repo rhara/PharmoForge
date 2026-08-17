@@ -13,25 +13,34 @@ DEFAULT_TOP_N = 20
 
 @click.command("analyze-scaffolds")
 @click.argument("input_path", type=click.Path(exists=True, path_type=Path))
-@click.option("--smiles-col", default="smiles", show_default=True, help="SMILES列名")
-@click.option("--activity-col", default="_median", show_default=True, help="活性値列名")
+@click.option("--smiles-col", default="smiles", show_default=True, help="SMILES column name")
+@click.option("--activity-col", default="_median", show_default=True, help="Activity value column name")
 @click.option(
-    "--output-dir", "-o", required=True, type=click.Path(path_type=Path), help="出力ディレクトリ"
+    "--output-dir", "-o", required=True, type=click.Path(path_type=Path), help="Output directory"
 )
 @click.option(
-    "--high-quantile", default=DEFAULT_HIGH_QUANTILE, show_default=True, help="高活性とみなす分位点(以上)"
+    "--high-quantile",
+    default=DEFAULT_HIGH_QUANTILE,
+    show_default=True,
+    help="Quantile threshold (and above) considered high activity",
 )
 @click.option(
-    "--low-quantile", default=DEFAULT_LOW_QUANTILE, show_default=True, help="低活性とみなす分位点(以下)"
+    "--low-quantile",
+    default=DEFAULT_LOW_QUANTILE,
+    show_default=True,
+    help="Quantile threshold (and below) considered low activity",
 )
 @click.option(
     "--min-count",
     default=DEFAULT_MIN_COUNT,
     show_default=True,
-    help="集計対象とするスキャフォールドの最小出現数(全bin合計)",
+    help="Minimum occurrence count (summed over all bins) for a scaffold to be included",
 )
 @click.option(
-    "--top-n", default=DEFAULT_TOP_N, show_default=True, help="グリッド画像に描画する上位・下位件数"
+    "--top-n",
+    default=DEFAULT_TOP_N,
+    show_default=True,
+    help="Number of top/bottom entries drawn in the grid image",
 )
 def analyze_scaffolds_cmd(
     input_path: Path,
@@ -43,13 +52,13 @@ def analyze_scaffolds_cmd(
     min_count: int,
     top_n: int,
 ):
-    """Bemis-Murckoスキャフォールドで活性の高低分布を比較する。
+    """Compare high/low activity distribution by Bemis-Murcko scaffold.
 
-    INPUT_PATHはSMILES列(既定`smiles`)と活性値列(既定`_median`)を持つTSV/CSV
-    (`pf fetch activities=...`の出力をそのまま使える)。
+    INPUT_PATH is a TSV/CSV with a SMILES column (default `smiles`) and an activity value
+    column (default `_median`); the output of `pf fetch activities=...` can be used as-is.
 
     \b
-    例:
+    Examples:
       pf analyze-scaffolds data/cdk4_human_activities.tsv --output-dir data/cdk4_scaffold_analysis
     """
     df = pd.read_csv(input_path, sep=None, engine="python")

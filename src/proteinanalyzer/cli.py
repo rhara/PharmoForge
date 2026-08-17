@@ -16,15 +16,15 @@ from .report import format_protein_info_json, write_protein_info_json
     "output_path",
     default=None,
     type=click.Path(path_type=Path),
-    help="出力JSONファイルパス(省略時は標準出力にJSONを出力する)",
+    help="Output JSON file path (prints JSON to stdout if omitted)",
 )
 def protein_info_cmd(identifier: str, output_path: Path | None):
-    """UniProtから創薬(構造生物学・メディシナルケミストリー)向けの蛋白情報を取得しJSONで保存する。
+    """Fetch drug-discovery-relevant protein info (structural biology/medicinal chemistry) from UniProt and save it as JSON.
 
-    IDENTIFIERにはUniProt entry name(例: EGFR_HUMAN)またはaccession(例: P00533)を指定する。
+    IDENTIFIER is a UniProt entry name (e.g. EGFR_HUMAN) or accession (e.g. P00533).
 
     \b
-    例:
+    Examples:
       pf protein-info EGFR_HUMAN --output data/egfr_info.json
       pf protein-info P00533 --output data/egfr_info.json
       pf protein-info EGFR_HUMAN

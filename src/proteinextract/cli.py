@@ -10,13 +10,13 @@ from .extract import extract_structure
 @click.option(
     "--chains",
     default=None,
-    help="抽出するチェーンID(auth_asym_id。PyMOLやRCSBのWebサイトで見えるID)をカンマ区切りで指定(例: A,B)。省略時は全チェーン。",
+    help="Comma-separated chain IDs to extract (auth_asym_id, the ID shown in PyMOL/RCSB's website; e.g. A,B). All chains if omitted.",
 )
 @click.option(
     "--remove-water",
     is_flag=True,
     default=False,
-    help="水分子(HOH等)を除去する",
+    help="Remove water molecules (HOH etc.)",
 )
 @click.option(
     "--output",
@@ -24,15 +24,16 @@ from .extract import extract_structure
     "output_path",
     required=True,
     type=click.Path(path_type=Path),
-    help="出力構造ファイルパス(拡張子.pdb/.cifで形式を判別)",
+    help="Output structure file path (format determined by the .pdb/.cif extension)",
 )
 def protein_extract_cmd(input_path: Path, chains: str | None, remove_water: bool, output_path: Path):
-    """構造ファイル(PDB/CIF)から指定チェーンを抽出し、必要に応じて水分子を除去する。
+    """Extract the given chains from a structure file (PDB/CIF), optionally removing water molecules.
 
-    入力・出力とも拡張子(`.pdb`/`.cif`)で形式を自動判別するため、異なる形式間でも変換できる。
+    Both input and output formats (`.pdb`/`.cif`) are auto-detected from the extension, so this also
+    converts between formats.
 
     \b
-    例:
+    Examples:
       pf protein-extract data/cdk2/2CCH.cif --chains=A --remove-water --output data/cdk2/2CCH_main.cif
       pf protein-extract data/tyk2/6NZP.cif --remove-water --output data/tyk2/6NZP_nowater.pdb
     """

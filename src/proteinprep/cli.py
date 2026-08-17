@@ -13,27 +13,27 @@ from .repair import repair_structure
     "output_path",
     required=True,
     type=click.Path(path_type=Path),
-    help="出力PDBファイルパス",
+    help="Output PDB file path",
 )
 @click.option(
     "--mode",
     type=click.Choice(["dock", "md"]),
     default="dock",
     show_default=True,
-    help="dock=水素原子を付加しない、md=指定pHでプロトン化する",
+    help="dock = do not add hydrogens, md = protonate at the given pH",
 )
 @click.option(
     "--ph",
     type=float,
     default=7.0,
     show_default=True,
-    help="--mode md 時のプロトン化pH",
+    help="Protonation pH used with --mode md",
 )
 def prep_protein_cmd(input_path: Path, output_path: Path, mode: str, ph: float):
-    """蛋白構造(PDB/CIF)の欠損原子を補完し、必要に応じてプロトン化する(PDBFixer)。
+    """Repair missing atoms in a protein structure (PDB/CIF), optionally protonating it (PDBFixer).
 
     \b
-    例:
+    Examples:
       pf prep-protein data/9csk.cif --output data/9csk_dock.pdb --mode dock
       pf prep-protein data/P61626.cif --output data/P61626_md.pdb --mode md --ph 7.4
     """
