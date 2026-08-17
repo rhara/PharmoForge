@@ -8,6 +8,8 @@ logger = get_logger(__name__)
 
 UNIPROT_ENTRY_URL = "https://rest.uniprot.org/uniprotkb/{accession}.json"
 UNIPROT_FASTA_URL = "https://rest.uniprot.org/uniprotkb/{accession}.fasta"
+UNIPROT_ACCESSIONS_URL = "https://rest.uniprot.org/uniprotkb/accessions"
+UNIPROT_ACCESSIONS_BATCH_SIZE = 100
 
 
 def fetch_entry(accession: str) -> dict:
@@ -17,6 +19,31 @@ def fetch_entry(accession: str) -> dict:
     resp = requests.get(UNIPROT_ENTRY_URL.format(accession=accession), timeout=30)
     resp.raise_for_status()
     return resp.json()
+
+
+def fetch_entry_names(accessions: list[str]) -> dict[str, str]:
+    """複数のUniProt accessionのentry name(例: P11802 -> CDK4_HUMAN)をまとめて取得する。
+
+    UniProtのバッチ取得エンドポイント(`/uniprotkb/accessions`、最大100件/リクエスト)を使うため、
+    accessionごとに`fetch_entry`を呼ぶより大幅に少ないリクエスト数で済む。
+    見つからなかったaccessionは返り値のdictに含まれない。
+    """
+    accessions = [a.strip().upper() for a in accessions]
+    names: dict[str, str] = {}
+    total = len(accessions)
+    logger.info("Fetching UniProt entry names for %d accessions ...", total)
+    for i in range(0, total, UNIPROT_ACCESSIONS_BATCH_SIZE):
+        batch = accessions[i : i + UNIPROT_ACCESSIONS_BATCH_SIZE]
+        resp = requests.get(
+            UNIPROT_ACCESSIONS_URL,
+            params={"accessions": ",".join(batch), "fields": "accession,id"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        for result in resp.json().get("results", []):
+            names[result["primaryAccession"]] = result["uniProtkbId"]
+    logger.info("  -> %d entry names resolved", len(names))
+    return names
 
 
 def fetch_fasta(accession: str) -> bytes:

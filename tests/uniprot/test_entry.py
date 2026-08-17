@@ -153,3 +153,54 @@ def test_fetch_protein_info_combines_fetch_and_extract(mock_fetch_entry):
 
     assert info["accession"] == "P00533"
     mock_fetch_entry.assert_called_once_with("P00533")
+
+
+@patch("uniprot.entry.requests.get")
+def test_fetch_entry_names_single_batch(mock_get):
+    mock_get.return_value = MagicMock(raise_for_status=lambda: None)
+    mock_get.return_value.json.return_value = {
+        "results": [
+            {"primaryAccession": "Q00526", "uniProtkbId": "CDK3_HUMAN"},
+            {"primaryAccession": "P61075", "uniProtkbId": "CDK2H_PLAF7"},
+        ]
+    }
+
+    names = entry.fetch_entry_names(["q00526", "p61075"])
+
+    assert names == {"Q00526": "CDK3_HUMAN", "P61075": "CDK2H_PLAF7"}
+    called_kwargs = mock_get.call_args.kwargs
+    assert called_kwargs["params"]["accessions"] == "Q00526,P61075"
+
+
+@patch("uniprot.entry.requests.get")
+def test_fetch_entry_names_splits_into_batches(mock_get):
+    accessions = [f"P{i:05d}" for i in range(150)]
+    mock_get.side_effect = [
+        MagicMock(
+            raise_for_status=lambda: None,
+            json=lambda: {"results": [{"primaryAccession": a, "uniProtkbId": f"{a}_HUMAN"} for a in accessions[:100]]},
+        ),
+        MagicMock(
+            raise_for_status=lambda: None,
+            json=lambda: {"results": [{"primaryAccession": a, "uniProtkbId": f"{a}_HUMAN"} for a in accessions[100:]]},
+        ),
+    ]
+
+    names = entry.fetch_entry_names(accessions)
+
+    assert mock_get.call_count == 2
+    assert len(names) == 150
+    assert names["P00000"] == "P00000_HUMAN"
+    assert names["P00149"] == "P00149_HUMAN"
+
+
+@patch("uniprot.entry.requests.get")
+def test_fetch_entry_names_missing_accession_omitted(mock_get):
+    mock_get.return_value = MagicMock(raise_for_status=lambda: None)
+    mock_get.return_value.json.return_value = {
+        "results": [{"primaryAccession": "Q00526", "uniProtkbId": "CDK3_HUMAN"}]
+    }
+
+    names = entry.fetch_entry_names(["Q00526", "NOTREAL1"])
+
+    assert names == {"Q00526": "CDK3_HUMAN"}

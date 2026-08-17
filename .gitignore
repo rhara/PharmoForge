@@ -8,3 +8,4 @@ build/
 dist/
 
 data/
+.ipynb_checkpoints/

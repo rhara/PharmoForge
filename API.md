@@ -59,7 +59,7 @@ ChEMBL REST APIからの活性データ取得(`chembl_webresource_client`は使�
 
 ## `src/rcsb`
 
-RCSB PDBからの構造ファイルダウンロード。
+RCSB PDBからの構造ファイルダウンロード・メタデータ取得。
 
 ### `rcsb.download`
 
@@ -67,6 +67,13 @@ RCSB PDBからの構造ファイルダウンロード。
 | --- | --- |
 | `fetch_structure(pdb_id: str, output: Path, fmt: str \| None = None) -> None` | PDB IDの構造ファイルを1件ダウンロードし`output`に保存する。`fmt`(`cif`/`pdb`)省略時は`output`の拡張子から推定(既定`cif`)。 |
 | `fetch_structures(pdb_ids: list[str], output_dir: Path, fmt: str) -> None` | 複数のPDB IDをまとめてダウンロードし、`output_dir/<PDB_ID>.<fmt>`として保存する。 |
+
+### `rcsb.metadata`
+
+| 関数 | 説明 |
+| --- | --- |
+| `fetch_entry_info(pdb_id: str) -> dict` | PDB IDの実験手法・解像度等をRCSB Data APIから取得する。`{"pdb_id", "method", "resolution"}`を返す。`resolution`はX線構造以外では`None`になりうる。`method`の値はRCSBの表記(例: `"X-ray"`、`"EM"`)をそのまま返す。 |
+| `fetch_entries_info(pdb_ids: list[str]) -> list[dict]` | 複数PDB IDのメタデータをまとめて取得する。 |
 
 ## `src/afdb`
 
@@ -88,9 +95,25 @@ UniProtエントリの取得と、創薬(構造生物学・メディシナルケ
 | 関数 | 説明 |
 | --- | --- |
 | `fetch_entry(accession: str) -> dict` | UniProt accessionの生エントリJSON(UniProt REST API)を取得する。 |
+| `fetch_entry_names(accessions: list[str]) -> dict[str, str]` | 複数のUniProt accessionのentry name(例: `P11802` -> `CDK4_HUMAN`)をバッチ取得エンドポイント(`/uniprotkb/accessions`、最大100件/リクエスト)でまとめて取得する。accessionごとに`fetch_entry`を呼ぶより大幅に少ないリクエスト数で済む。見つからなかったaccessionは返り値に含まれない。 |
 | `fetch_fasta(accession: str) -> bytes` | UniProt accessionの正規配列をUniProt標準のFASTA形式(`https://rest.uniprot.org/uniprotkb/{accession}.fasta`)で取得する。 |
 | `extract_protein_info(entry: dict) -> dict` | 生エントリJSONから創薬関連情報を平坦なdictに整理する。抽出項目: `accession`/`entry_name`/`protein_name`/`gene_name`/`organism`/`taxon_id`/`sequence`/`length`/`mol_weight`/`ec_numbers`/`function`/`keywords`/`diseases`/`active_sites`/`binding_sites`/`disulfide_bonds`/`glycosylation_sites`/`modified_residues`/`transmembrane_regions`/`signal_peptide`/`domains`/`pdb_structures`(id/method/resolution)/`alphafold_id`。 |
 | `fetch_protein_info(accession: str) -> dict` | `fetch_entry` + `extract_protein_info` をまとめた入口。 |
+
+## `src/blastsearch`
+
+NCBI BLAST Web API(QBLAST)を用いた配列相同性検索。
+
+### `blastsearch.ncbi`
+
+| 関数 | 説明 |
+| --- | --- |
+| `submit_blast(sequence: str, program: str = "blastp", database: str = "pdb", entrez_query: str \| None = None) -> str` | BLASTジョブを投函し、Request ID(RID)を返す。`database`は`"pdb"`(PDBエントリの配列)、`"swissprot"`(UniProtKB/Swiss-Prot)等、NCBI BLASTが受け付ける値を指定できる。`entrez_query`はNCBI Entrezのクエリ構文(例: `"Homo sapiens[Organism]"`)で検索対象を絞り込む。 |
+| `wait_for_blast(rid: str, poll_interval: float = 10.0, timeout: float = 600.0) -> None` | BLASTジョブの完了(`Status=READY`)までポーリングして待機する。失敗ステータスで`RuntimeError`、タイムアウトで`TimeoutError`。 |
+| `fetch_hits(rid: str) -> list[dict]` | 完了したBLASTジョブのヒット一覧を取得する。各要素は`{"subject_id", "identity", "align_length", "evalue", "bit_score"}`。`subject_id`はデータベースに応じた生の識別子文字列で、`parse_pdb_subject_id`/`parse_uniprot_subject_id`で解釈する。 |
+| `blast_search(sequence: str, program: str = "blastp", database: str = "pdb", entrez_query: str \| None = None, poll_interval: float = 10.0, timeout: float = 600.0) -> list[dict]` | `submit_blast` + `wait_for_blast` + `fetch_hits` をまとめた入口。 |
+| `parse_pdb_subject_id(subject_id: str) -> tuple[str, str]` | `database="pdb"`のヒットのsubject id(例: `pdb\|6GZM\|A`、`6GZM_A`)からPDB IDとchainを取り出す。 |
+| `parse_uniprot_subject_id(subject_id: str) -> str` | `database="swissprot"`等のヒットのsubject id(例: `sp\|P11802\|CDK4_HUMAN`、`P11802.1`)からUniProt accessionを取り出す(バージョン番号は除く)。 |
 
 ## `src/molscaffold`
 
