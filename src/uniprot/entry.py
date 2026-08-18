@@ -78,6 +78,19 @@ def _xref_property(xref: dict, key: str) -> str | None:
     return None
 
 
+def parse_resolution(resolution: str | None) -> float | None:
+    """`pdb_structures`の解像度表記(例: "2.25 A")をÅ単位のfloatに変換する。
+
+    NMR構造等で解像度自体が無い(`None`)場合や、数値として解釈できない場合は`None`を返す。
+    """
+    if not resolution:
+        return None
+    try:
+        return float(resolution.split()[0])
+    except ValueError:
+        return None
+
+
 def extract_protein_info(entry: dict) -> dict:
     """UniProtの生エントリJSONから、創薬関連情報を平坦なdictに整理する。
 

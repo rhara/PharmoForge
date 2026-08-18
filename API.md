@@ -45,6 +45,16 @@ ChEMBL REST APIからの活性データ取得(`chembl_webresource_client`は使�
 | --- | --- |
 | `fetch_activities(target_chembl_id: str, page_size: int = 1000) -> list[dict]` | 指定したChEMBL target idについて、pChEMBL値を持つ活性データをChEMBL REST APIから全件取得する(ページネーション追従)。 |
 
+### `chembl.local`
+
+ChEMBL Web APIが障害・レート制限等で使えない場合のフォールバック。ChEMBL公式配布のSQLiteデータベース
+(`chembl_XX.db`)に対し`sqlite3`で直接クエリする。
+
+| 関数 | 説明 |
+| --- | --- |
+| `resolve_target_chembl_id(accession: str, db_path: str \| Path) -> str` | UniProt accessionから、SINGLE PROTEINターゲットのChEMBL target idを解決する(`idmap.accession_to_chembl_target_id`のWeb API版と同じ入出力)。見つからなければ`ValueError`。 |
+| `fetch_activities(target_chembl_id: str, db_path: str \| Path) -> list[dict]` | 指定したChEMBL target idについて、pChEMBL値を持つ活性データを取得する。各要素は`chembl.activity.fetch_activities`(Web API版)と同じ主要フィールド(`molecule_chembl_id`/`molecule_pref_name`/`canonical_smiles`/`standard_type`/`standard_value`/`standard_units`/`pchembl_value`/`assay_chembl_id`/`document_chembl_id`)を持つ。 |
+
 ## `src/molstd`
 
 化合物構造の標準化。RDKit標準の`rdMolStandardize`のみを用いた自前実装
@@ -56,6 +66,12 @@ ChEMBL REST APIからの活性データ取得(`chembl_webresource_client`は使�
 | 関数 | 説明 |
 | --- | --- |
 | `standardize_smiles(smiles: str) -> str \| None` | SMILESを`rdMolStandardize`(`Cleanup`→`FragmentParent`→`Uncharger`)で標準化し、親構造(塩等を除いた形)のcanonical SMILESを返す。パースに失敗した場合は`None`。 |
+
+### `molstd.descriptors`
+
+| 関数 | 説明 |
+| --- | --- |
+| `calc_mol_weight(smiles: str) -> float \| None` | SMILESから平均分子量(Da、RDKitの`Descriptors.MolWt`)を計算する。パースに失敗した場合は`None`。 |
 
 ## `src/rcsb`
 
@@ -99,6 +115,7 @@ UniProtエントリの取得と、創薬(構造生物学・メディシナルケ
 | `fetch_fasta(accession: str) -> bytes` | UniProt accessionの正規配列をUniProt標準のFASTA形式(`https://rest.uniprot.org/uniprotkb/{accession}.fasta`)で取得する。 |
 | `extract_protein_info(entry: dict) -> dict` | 生エントリJSONから創薬関連情報を平坦なdictに整理する。抽出項目: `accession`/`entry_name`/`protein_name`/`gene_name`/`organism`/`taxon_id`/`sequence`/`length`/`mol_weight`/`ec_numbers`/`function`/`keywords`/`diseases`/`active_sites`/`binding_sites`/`disulfide_bonds`/`glycosylation_sites`/`modified_residues`/`transmembrane_regions`/`signal_peptide`/`domains`/`pdb_structures`(id/method/resolution)/`alphafold_id`。 |
 | `fetch_protein_info(accession: str) -> dict` | `fetch_entry` + `extract_protein_info` をまとめた入口。 |
+| `parse_resolution(resolution: str \| None) -> float \| None` | `pdb_structures`の解像度表記(例: `"2.25 A"`)をÅ単位の`float`に変換する。NMR構造等で解像度が無い場合や数値として解釈できない場合は`None`。 |
 
 ## `src/blastsearch`
 

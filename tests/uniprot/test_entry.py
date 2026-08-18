@@ -155,6 +155,22 @@ def test_fetch_protein_info_combines_fetch_and_extract(mock_fetch_entry):
     mock_fetch_entry.assert_called_once_with("P00533")
 
 
+def test_parse_resolution_valid():
+    assert entry.parse_resolution("2.25 A") == 2.25
+
+
+def test_parse_resolution_none():
+    assert entry.parse_resolution(None) is None
+
+
+def test_parse_resolution_empty_string():
+    assert entry.parse_resolution("") is None
+
+
+def test_parse_resolution_unparsable():
+    assert entry.parse_resolution("-") is None
+
+
 @patch("uniprot.entry.requests.get")
 def test_fetch_entry_names_single_batch(mock_get):
     mock_get.return_value = MagicMock(raise_for_status=lambda: None)
