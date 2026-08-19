@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from prody import calcRMSD, calcTransformation
+from prody import Transformation, calcRMSD, calcTransformation
+from prody.atomic.atomic import Atomic
 
 from core.logging_utils import get_logger
 from structio import parse_structure
@@ -84,3 +85,66 @@ def fit_by_residue_number(mobile_path: Path, target_path: Path) -> FitResult:
         mobile_chain=mobile_chain,
         target_chain=target_chain,
     )
+
+
+def fit_by_residue_pairs(
+    mobile_path: Path,
+    target_path: Path,
+    mobile_chain: str,
+    target_chain: str,
+    resnum_pairs: list[tuple[int, int]],
+) -> FitResult:
+    """`resnum_pairs`((mobile側残基番号, target側残基番号)の対応リスト)のCA原子同士を
+    対応付け、mobileをtargetに重ね合わせる剛体変換を求める。
+
+    `fit_by_residue_number`は同一蛋白の構造間(残基番号が一致する前提)専用だが、
+    こちらは対応関係を呼び出し側が用意する(例: 別蛋白間の配列アラインメント結果から
+    抽出した、ATP結合部位周辺residueのみの対応)ため、mobile/target間で残基番号体系が
+    異なる構造間の重ね合わせにも使える。
+    """
+    mobile = parse_structure(Path(mobile_path))
+    target = parse_structure(Path(target_path))
+
+    mobile_ca = mobile.select(f"name CA and protein and chain {mobile_chain}")
+    target_ca = target.select(f"name CA and protein and chain {target_chain}")
+    if mobile_ca is None:
+        raise ValueError(f"mobileにチェーン{mobile_chain}のCA原子が見つからない: {mobile_path}")
+    if target_ca is None:
+        raise ValueError(f"targetにチェーン{target_chain}のCA原子が見つからない: {target_path}")
+
+    mobile_index = {int(r): i for i, r in enumerate(mobile_ca.getResnums())}
+    target_index = {int(r): i for i, r in enumerate(target_ca.getResnums())}
+
+    matched = [(m, t) for m, t in resnum_pairs if m in mobile_index and t in target_index]
+    if not matched:
+        raise ValueError(f"mobileとtargetの間に対応するCA原子の組が見つからない: {mobile_path} -> {target_path}")
+
+    mobile_coords = mobile_ca.getCoords()[[mobile_index[m] for m, _ in matched]]
+    target_coords = target_ca.getCoords()[[target_index[t] for _, t in matched]]
+
+    transformation = calcTransformation(mobile_coords, target_coords)
+    fitted = transformation.apply(mobile_coords.copy())
+    rmsd = float(calcRMSD(fitted, target_coords))
+
+    logger.info(
+        "fit_by_residue_pairs: %s(chain %s) -> %s(chain %s): RMSD=%.3f (%d matched residue pairs)",
+        mobile_path, mobile_chain, target_path, target_chain, rmsd, len(matched),
+    )
+    return FitResult(
+        matrix=transformation.getMatrix(),
+        rmsd=rmsd,
+        n_residues=len(matched),
+        mobile_chain=mobile_chain,
+        target_chain=target_chain,
+    )
+
+
+def apply_fit(fit_result: FitResult, atoms: Atomic) -> Atomic:
+    """`fit_result`(`fit_by_residue_number`/`fit_by_residue_pairs`の戻り値)の剛体変換を
+    `atoms`(そのmobile構造由来のAtomic、選択結果でも可)に適用する。
+
+    `Transformation.apply`はAtomPointer(選択結果)を渡した場合も、その親AtomGroup全体の
+    座標を変換する(=チェーンID等のラベルは一切変更しない)ため、水を除いた選択結果を
+    渡しても元の全チェーンの座標が正しく変換される。
+    """
+    return Transformation(fit_result.matrix).apply(atoms)
