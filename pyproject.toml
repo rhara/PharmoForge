@@ -19,6 +19,8 @@ dependencies = [
     "biopython",
     "meeko",  # conda-forgeのビルドがpython<3.14までにしか対応していないためpipでインストールする
     "gemmi",  # 同上(meekoの依存)
+    "python-dotenv",
+    "boltz2-python-client",  # conda-forgeに存在しないためpipでインストールする(NVIDIA公式パッケージ)
 ]
 
 [project.optional-dependencies]

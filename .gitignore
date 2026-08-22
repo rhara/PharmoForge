@@ -9,3 +9,4 @@ dist/
 
 data/
 .ipynb_checkpoints/
+.env

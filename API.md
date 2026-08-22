@@ -397,3 +397,19 @@ Vinaの`--out`出力自体にはリガンドポーズと可動側鎖(フレキ�
 | --- | --- |
 | `export_docked_poses(polymer_json: Path, vina_output_pdbqt: Path, output_dir: Path, name: str, modes: list[int] \| None = None) -> list[ExportedPose]` | Vina出力(リガンド+フレキシブル受容体のPDBQT)から、モードごとに受容体のフルコンフォメーション(リジッド部分+可動側鎖、標準PDB形式・水素付き)を`<output_dir>/<name>_mode<N>_receptor.pdb`に、リガンドポーズ(結合次数を復元したSDF)を`<output_dir>/<name>_mode<N>_ligand.sdf`に書き出す。`modes`省略時は全モードを書き出す(1始まり、Vinaのスコア順)。SDF変換に失敗した場合は`ValueError`。 |
 | `ExportedPose` | 1ポーズ分の書き出し結果(dataclass)。`mode: int`、`receptor_pdb: Path`、`ligand_sdf: Path`。 |
+
+## `src/folding`
+
+[Boltz-2](https://github.com/jwohlwend/boltz)による蛋白構造予測(NVIDIAホスト型API、
+`https://health.api.nvidia.com`)。ローカルGPUのVRAM不足のため、ローカル実行ではなくAPI経由で行う
+方針(詳細は[FOLDING_PROMPT.md](folding/FOLDING_PROMPT.md#経緯-ローカルgpuではなくnvidiaホスト型apiを使う理由)参照)。
+認証は環境変数`NVIDIA_API_KEY`。使い方は[README.md](folding/README.md)参照。
+
+### `folding.boltz`
+
+| 関数 | 説明 |
+| --- | --- |
+| `search_msa(sequence: str, output_path: Path, api_key: str \| None = None, max_msa_sequences: int = 500, e_value: float = 0.0001) -> Path` | NVIDIA MSA Search NIM(colabfold)で配列のMSAを検索し、a3m形式で`output_path`に保存する。`api_key`省略時は環境変数`NVIDIA_API_KEY`を使う(未設定なら`ValueError`)。 |
+| `predict_structure(sequence: str, output_dir: Path, name: str, msa_path: Path \| None = None, templates: list[StructureTemplate] \| None = None, recycling_steps: int = 3, sampling_steps: int = 50, diffusion_samples: int = 1, api_key: str \| None = None, timeout: float = 1800.0) -> BoltzPrediction` | Boltz-2 NIMで構造を予測し、生成された各モデル(`diffusion_samples`件)を`<output_dir>/<name>_model<N>.cif`に保存する。`msa_path`省略時は単一配列モード(精度低下、非推奨)。`templates`(最大4件、蛋白のみ、超過時`ValueError`)を指定すると構造予測をそのテンプレートに近づけるようソフトに誘導する(厳密な拘束ではない、実測で効果が乏しいケースを確認済み。詳細は[FOLDING_PROMPT.md](folding/FOLDING_PROMPT.md#テンプレート誘導の検証)参照)。 |
+| `StructureTemplate` | テンプレート指定(dataclass)。`structure_path: Path`(CIF/PDB)、`chain_id: str \| None`(テンプレート構造中のどのチェーンを使うか)、`name: str \| None`。 |
+| `BoltzPrediction` | 予測結果(dataclass)。`structure_paths: list[Path]`(モデルごとのCIF)、`confidence_scores: list[float]`、`ptm_scores: list[float]`。 |

@@ -92,7 +92,8 @@ print(exported[0].receptor_pdb, exported[0].ligand_sdf)
 - ドッキングエンジンは[AutoDock Vina](https://github.com/ccsb-scripps/AutoDock-Vina)(専用env、上記参照)。
 - 受容体PDBQT準備・ポーズ復元は[meeko](https://github.com/forlilab/meeko)を使う(`ligandprep`と同じ理由で
   `pharmoforge`環境にpipインストール)。
-- GPU対応(AutoDock-GPU/gnina等)は未実装。現状はVinaのマルチスレッド(`--cpu`)のみ。
+- 他エンジン(smina/gnina)を実測比較した結果、vinaを継続採用している。詳細は
+  [DOCKING_PROMPT.md](DOCKING_PROMPT.md#エンジン選定smina-gninaとの比較)参照。
 
 ## テスト
 

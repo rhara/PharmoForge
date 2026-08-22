@@ -61,6 +61,7 @@
 | `src/pocketfinder` | fpocketによる蛋白ポケット検出・周辺残基一覧化・PyMOLでのポケット可視化CLI([詳細](pocketfinder/README.md)) |
 | `src/ligandprep` | SMILESからの3D配座生成・ドッキング用PDBQT変換(RDKit + meeko)([詳細](ligandprep/README.md)) |
 | `src/docking` | 受容体PDBQT準備(指定残基のフレキシブル化)・AutoDock Vinaの実行・結果パース・ポーズごとの受容体フルコンフォメーション(PDB)+リガンドポーズ(SDF)の復元([詳細](docking/README.md)) |
+| `src/folding` | Boltz-2による蛋白構造予測(NVIDIAホスト型API)。MSA検索・構造予測・テンプレートによる構造誘導([詳細](folding/README.md)) |
 
 `pf`コマンド自体は`src/core/cli.py`のclickグループが起点となり、各機能パッケージがサブコマンドを登録する。
 サブコマンド一覧は[`pf`コマンド一覧](#pfコマンド一覧)を参照。
