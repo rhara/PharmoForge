@@ -17,6 +17,8 @@ dependencies = [
     "pdbfixer",
     "prody",  # conda-forgeでのビルド提供が不安定なためpipでインストールする
     "biopython",
+    "meeko",  # conda-forgeのビルドがpython<3.14までにしか対応していないためpipでインストールする
+    "gemmi",  # 同上(meekoの依存)
 ]
 
 [project.optional-dependencies]

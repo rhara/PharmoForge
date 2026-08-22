@@ -1,9 +1,14 @@
 # API
 
-`src`以下のアトミックな(その機能固有のドメインロジックに閉じず、単体で再利用しうる)関数・パッケージの一覧。
-記録対象は「現に複数の機能から使われているか」ではなく「再利用しうるアトミックな処理か」で判断する
-(現時点の呼び出し元が1機能のみでも対象に含める、[CLAUDE.md](CLAUDE.md)参照)。
-機能固有のドメインロジック(例: `src/fetcher`のChEMBL APIパラメータ組み立て)は各機能のREADME/PROMPT記録を参照。
+`src`以下の、再利用しうる関数・パッケージの一覧。ノートブック(`notebooks/`)はこれらの関数の実例集
+という位置づけであり、関数のシグネチャ・挙動の正はここに置く。
+記録対象は「現に複数の機能から使われているか」ではなく「再利用しうる処理か」で判断する
+(現時点の呼び出し元が1機能・1ノートブックのみでも対象に含める、[CLAUDE.md](CLAUDE.md)参照)。
+root直下にREADME/PROMPT記録を持つ機能パッケージ(`proteinprep`/`docking`等)であっても、含まれる関数が
+再利用しうるならAPI.mdにも記録する(root README/PROMPTの有無はAPI.md記載の可否を決めない。両者は
+役割が異なり、README/PROMPTは機能としての使い方・経緯・環境構築、API.mdは関数シグネチャ・挙動の
+リファレンス)。機能固有のドメインロジックそのもの(例: `src/fetcher`のChEMBL APIパラメータ組み立て)は
+関数として切り出しにくいためAPI.md対象外とし、各機能のREADME/PROMPT記録側に置く。
 
 ## `src/core`
 
@@ -54,6 +59,18 @@ ChEMBL Web APIが障害・レート制限等で使えない場合のフォール
 | --- | --- |
 | `resolve_target_chembl_id(accession: str, db_path: str \| Path) -> str` | UniProt accessionから、SINGLE PROTEINターゲットのChEMBL target idを解決する(`idmap.accession_to_chembl_target_id`のWeb API版と同じ入出力)。見つからなければ`ValueError`。 |
 | `fetch_activities(target_chembl_id: str, db_path: str \| Path) -> list[dict]` | 指定したChEMBL target idについて、pChEMBL値を持つ活性データを取得する。各要素は`chembl.activity.fetch_activities`(Web API版)と同じ主要フィールド(`molecule_chembl_id`/`molecule_pref_name`/`canonical_smiles`/`standard_type`/`standard_value`/`standard_units`/`pchembl_value`/`assay_chembl_id`/`document_chembl_id`)を持つ。 |
+
+### `chembl.aggregate`
+
+複数のChEMBL標的にまたがる活性データの集計(化合物×標的単位の要約、化合物単位のロールアップ、
+潜在活性化合物の抽出)。標的ごとの活性データ取得そのものは`chembl.local.fetch_activities`に委譲する。
+
+| 関数 | 説明 |
+| --- | --- |
+| `collect_standardized_activities(targets_df: pd.DataFrame, db_path: str \| Path, target_id_col: str = "chembl_target_id", accession_col: str = "accession", entry_name_col: str = "entry_name") -> pd.DataFrame` | 複数のChEMBL標的について活性データを収集し、標準化SMILES・pChEMBL値のみのフラットなテーブル(列: `smiles`/`accession`/`entry_name`/`pchembl_value`)にする。`target_id_col`がNaNの行はスキップ。pChEMBL値・SMILESを欠く活性、標準化(`molstd.standardize_smiles`)に失敗した化合物は除外する。 |
+| `summarize_compound_target_activity(activity_df: pd.DataFrame, group_cols: tuple[str, ...] = ("smiles", "accession", "entry_name"), value_col: str = "pchembl_value") -> pd.DataFrame` | 化合物×標的の単位で活性値のmedian/mean/std/個数を集計する(median降順)。 |
+| `rollup_compound_summary(activity_summary_df: pd.DataFrame, smiles_col: str = "smiles", entry_name_col: str = "entry_name", value_col: str = "median") -> pd.DataFrame` | `summarize_compound_target_activity`の出力を化合物単位にロールアップする(`target_count`・`best_target_<entry_name_col>`・`best_<value_col>`、`best_<value_col>`降順)。 |
+| `select_high_potency_compounds(df: pd.DataFrame, potency_col: str, potency_cutoff: float, mol_weight_col: str \| None = None, mol_weight_range: tuple[float, float] \| None = None) -> pd.DataFrame` | `potency_col >= potency_cutoff`の行を抽出する。`mol_weight_col`/`mol_weight_range`を両方指定した場合は分子量(drug-like範囲等)でも絞り込む。 |
 
 ## `src/molstd`
 
@@ -131,6 +148,16 @@ NCBI BLAST Web API(QBLAST)を用いた配列相同性検索。
 | `blast_search(sequence: str, program: str = "blastp", database: str = "pdb", entrez_query: str \| None = None, poll_interval: float = 10.0, timeout: float = 600.0) -> list[dict]` | `submit_blast` + `wait_for_blast` + `fetch_hits` をまとめた入口。 |
 | `parse_pdb_subject_id(subject_id: str) -> tuple[str, str]` | `database="pdb"`のヒットのsubject id(例: `pdb\|6GZM\|A`、`6GZM_A`)からPDB IDとchainを取り出す。 |
 | `parse_uniprot_subject_id(subject_id: str) -> str` | `database="swissprot"`等のヒットのsubject id(例: `sp\|P11802\|CDK4_HUMAN`、`P11802.1`)からUniProt accessionを取り出す(バージョン番号は除く)。 |
+| `best_hit_per_accession(hits: list[dict], exclude_accession: str \| None = None) -> list[dict]` | UniProt accessionごとに最良ヒット(evalue最小)だけを残し、evalue昇順で返す(各ヒットに`"accession"`キーを追加)。`exclude_accession`(クエリ自身のaccession等)は除外できる。 |
+| `format_evalue(evalue: float) -> str` | e-valueを表示用に整形する。0はそのまま`"0"`、それ以外は有効数字2桁の指数表記(例: `9.47e-95` -> `"9.5e-95"`)。 |
+
+### `blastsearch.cache`
+
+BLASTジョブのファイルキャッシュ・再開可能な実行(notebookでの繰り返し実行を想定)。
+
+| 関数 | 説明 |
+| --- | --- |
+| `run_cached_blast(sequence: str, cache_dir: Path, program: str = "blastp", database: str = "pdb", entrez_query: str \| None = None, poll_interval: float = 10.0, timeout: float = 600.0) -> list[dict]` | `blast_search`にファイルキャッシュ(`cache_dir/blast_hits.pkl`)と再開可能性を加える。既にRID(`cache_dir/blast_rid.txt`)が投函済みならジョブを再投函せず待機を再開する。待機が`TimeoutError`の場合はRIDキャッシュを残したまま伝播(再度呼べば再開できる)、ジョブ失敗(`RuntimeError`)の場合はRIDキャッシュを破棄する(再投函が必要なため)。 |
 
 ## `src/molscaffold`
 
@@ -191,7 +218,16 @@ PDB/CIF構造ファイルの読み書き(拡張子で自動判別、[ProDy](http
 | 関数 | 説明 |
 | --- | --- |
 | `fit_by_residue_number(mobile_path: Path, target_path: Path) -> FitResult` | `mobile_path`・`target_path`の構造(PDB/CIF)を読み込み、残基番号が一致するCA原子同士を対応付けて`mobile`を`target`に重ね合わせる剛体変換を求める。両構造とも複数鎖を含む場合、共通残基番号数が最大になる鎖の組を自動選択する(NCS等による複数コピー対策)。共通の残基番号(CA)が1つもない場合は`ValueError`。 |
-| `FitResult` | `fit_by_residue_number`の戻り値(dataclass)。`matrix`(4x4 numpy配列、行優先。`v' = matrix @ [x, y, z, 1]`)、`rmsd: float`、`n_residues: int`、`mobile_chain: str`、`target_chain: str`。 |
+| `fit_by_residue_pairs(mobile_path: Path, target_path: Path, mobile_chain: str, target_chain: str, resnum_pairs: list[tuple[int, int]]) -> FitResult` | `fit_by_residue_number`の、残基番号体系が異なる蛋白間版。呼び出し側が用意した`resnum_pairs`((mobile側残基番号, target側残基番号)の対応リスト、例: 配列アラインメントで対応付けたポケット周辺残基)のCA原子同士を対応付けて重ね合わせる。対応するCA原子が1組もない場合は`ValueError`。 |
+| `apply_fit(fit_result: FitResult, atoms: Atomic) -> Atomic` | `fit_result`の剛体変換を`atoms`(そのmobile構造由来のAtomic、選択結果でも可)に適用する。選択結果を渡しても親AtomGroup全体の座標が変換される(チェーンID等のラベルは変更しない)。 |
+| `FitResult` | `fit_by_residue_number`/`fit_by_residue_pairs`の戻り値(dataclass)。`matrix`(4x4 numpy配列、行優先。`v' = matrix @ [x, y, z, 1]`)、`rmsd: float`、`n_residues: int`、`mobile_chain: str`、`target_chain: str`。 |
+
+### `structfit.chainselect`
+
+| 関数 | 説明 |
+| --- | --- |
+| `find_best_chain_for_residues(mobile_chains: list[ChainSequence], reference_sequence: str, reference_resnums: list[int]) -> BestChainCoverage \| None` | `mobile_chains`(`seqextract.get_chain_sequences`の結果)の各チェーンを`reference_sequence`にアラインメント(`seqalign.align_to_reference`)し、`reference_resnums`(基準配列側の残基番号集合、例: ポケット周辺残基)を最も多くカバーするチェーンを選ぶ。結晶構造のNCSコピーや無関係な鎖が混在する場合でも、目的の残基集合を最もよくカバーするチェーンを自動選択できる。1件もカバーしない場合は`None`。 |
+| `BestChainCoverage` | 選定結果(dataclass)。`chain_id: str`、`resnum_pairs: list[tuple[int, int]]`(`fit_by_residue_pairs`にそのまま渡せる形式)。 |
 
 ## `src/seqextract`
 
@@ -257,6 +293,44 @@ Biopythonの`Bio.Align.PairwiseAligner`を直接用いる(`structcompare`とは�
 | `Pocket` | 1ポケット分の情報(dataclass)。`pocket_id: int`、`score: float`、`druggability_score: float`、`n_alpha_spheres: int`、`volume: float`、`total_sasa`/`polar_sasa`/`apolar_sasa: float`、`hydrophobicity_score: float`、`residues: list[PocketResidue]`。 |
 | `PocketResidue` | ポケットに面する残基1件(dataclass)。`chain_id: str`、`resnum: int`(auth番号)、`resname: str`。 |
 
+### `pocket.selection`
+
+| 関数 | 説明 |
+| --- | --- |
+| `select_pocket_by_anchor_overlap(pockets: list[Pocket], anchor_resnums: set[int], chain_id: str) -> PocketSelection` | `anchor_resnums`(保存モチーフ・相同蛋白のリガンド接触残基等、生物学的根拠のある残基集合)との重なりが最大のポケットを選ぶ。fpocketのスコア(druggability等)は「目的のポケットかどうか」を直接表さないため、スコアではなく既知のアンカー残基をどれだけ含むかで選ぶ。重なりが0件のポケットしかない場合は`ValueError`。 |
+| `PocketSelection` | 選定結果(dataclass)。`pocket: Pocket`、`overlap_resnums: list[int]`、`overlap: int`(プロパティ、`len(overlap_resnums)`)。 |
+
+## `src/kinasemotifs`
+
+プロテインキナーゼドメインの保存モチーフ(P-loop/触媒Lys/HRD/DFG)を配列から検出する。ATP結合部位を
+構成することが構造生物学的に確立している位置をアンカーとして使う用途(例: fpocket検出ポケットの
+中からATP結合部位を特定する)を想定。CDK20の調査で`docking`向けにATP結合部位を特定する過程で、
+どのキナーゼにも使える汎用ロジックとして切り出した。
+
+### `kinasemotifs.motifs`
+
+| 関数 | 説明 |
+| --- | --- |
+| `find_kinase_motifs(sequence: str) -> KinaseMotifs` | タンパク質配列からP-loop(`G.G..G`)・触媒Lys(`VA[LIV]K`)・HRD(`HRD`)・DFG(`DFG`)・DFG+1(DFGの直後、多くのキナーゼでback pocketの壁を構成することが知られる位置)を検出する。全て見つからない場合は`ValueError`。個々のモチーフが検出できないこと自体は許容する(該当フィールドが`None`になる)。 |
+| `KinaseMotifs` | 検出結果(dataclass、1始まりの残基番号、区間は両端含む)。`p_loop`/`hrd`/`dfg: tuple[int, int] \| None`、`catalytic_lys`/`dfg_plus1: int \| None`、`anchor_resnums: set[int]`(プロパティ、検出できた全モチーフの残基番号をまとめた集合)。 |
+
+## `src/ligandcontacts`
+
+相同蛋白の複数のX線構造にまたがる、共結晶化リガンドの接触残基のコンセンサスを求める。単一構造だけの
+接触では採用せず、一定割合以上の構造で再現された残基だけを採用することで、フラグメントスクリーニング
+のオフターゲットヒットや無関係な部位への結合の影響を抑える。CDK20の調査でATP結合部位を相同蛋白の
+共結晶化リガンドから特定する過程で、蛋白・部位によらず使える汎用ロジックとして切り出した。
+構造読み込みは[`structio`](#srcstructio)、鎖配列抽出は[`seqextract`](#srcseqextract)、基準配列への
+番号マッピングは[`seqalign`](#srcseqalign)を利用する。
+
+### `ligandcontacts.consensus`
+
+| 関数 | 説明 |
+| --- | --- |
+| `find_consensus_ligand_contacts(structure_paths: list[Path], reference_sequence: str, contact_distance: float = 4.5, min_ligand_atoms: int = 8, min_fraction: float = 0.2, excluded_resnames: frozenset[str] = DEFAULT_EXCLUDED_RESNAMES) -> ConsensusLigandContacts` | `structure_paths`(相同蛋白のPDB/CIF)に含まれる共結晶化リガンドの接触残基(CA、`contact_distance`Å以内)を、配列アラインメントで`reference_sequence`の番号にマッピングし、`min_fraction`(リガンドを含む構造数に対する割合、最低2構造は要求)以上で再現された残基だけをコンセンサスとして返す。`min_ligand_atoms`未満のヘテロ残基・`excluded_resnames`(結晶化添加物・修飾残基等)は無視する。 |
+| `ConsensusLigandContacts` | 集計結果(dataclass)。`anchor_resnums: list[int]`(コンセンサス残基)、`n_ligands: int`、`contact_counts: dict[int, int]`(閾値適用前の生の接触回数)、`min_count: int`(採用に必要な最低カウント)。 |
+| `DEFAULT_EXCLUDED_RESNAMES` | 既定の除外resname集合(結晶化添加物・イオン・修飾残基等、`frozenset[str]`)。 |
+
 ## `src/pymolrun`
 
 PyMOLスクリプト(`.pml`)を専用conda/mamba環境で起動する。PyMOLは`rdkit>=2026.03.5`要件が共通環境
@@ -270,3 +344,56 @@ PyMOLスクリプト(`.pml`)を専用conda/mamba環境で起動する。PyMOLは
 | 関数 | 説明 |
 | --- | --- |
 | `run_pymol_script(script: str, pymol_env: str = "pymol") -> None` | `script`(PyMOLスクリプト本文)を一時`.pml`ファイルに書き出し、`mamba run -n <pymol_env> pymol <script>`でGUIモードのPyMOLを起動する。処理はPyMOLウィンドウを閉じるまでブロックし、実行後に一時ファイルを削除する。`mamba`/`conda`コマンドが見つからない場合は`RuntimeError`。 |
+
+## `src/ligandprep`
+
+SMILESからの3D配座生成・ドッキング用PDBQT変換([meeko](https://github.com/forlilab/meeko)、`pharmoforge`
+環境にpipでインストール、`pyproject.toml`参照)。互変異性体・電荷状態の標準化は関知しない
+(呼び出し側が[`molstd.standardize_smiles`](#srcmolstd)等で事前に行う前提)。使い方・環境構築は
+[README.md](ligandprep/README.md)、実装経緯は[LIGANDPREP_PROMPT.md](ligandprep/LIGANDPREP_PROMPT.md)参照。
+
+### `ligandprep.embed`
+
+| 関数 | 説明 |
+| --- | --- |
+| `prepare_ligand_pdbqt(smiles: str, name: str, output_path: Path) -> Path` | SMILES1件から3D配座を1つ生成(RDKit ETKDGv3、固定シード)しMMFF94で最適化、meekoで電荷(Gasteiger)・原子タイプを割り当ててPDBQTとして`output_path`に書き出す。SMILESが不正、配座生成失敗、PDBQT変換失敗のいずれも`ValueError`。 |
+
+## `src/docking`
+
+受容体PDBQT準備(指定残基のフレキシブル化)・AutoDock Vinaの実行・結果パース・ポーズごとの受容体フル
+コンフォメーション(PDB)+リガンドポーズ(SDF)の復元。vinaは`rdkit>=2026.03.5`とBoost.Pythonのビルドが
+競合し`pharmoforge`環境に同居できないため、専用conda/mamba環境(既定`vina`、
+[README.md](docking/README.md#実行環境)参照)に置く前提で`mamba run -n <env> vina ...`経由で起動する
+(`pymolrun`と同じ回避パターン)。使い方は[README.md](docking/README.md)、実装経緯・処理内容の詳細は
+[DOCKING_PROMPT.md](docking/DOCKING_PROMPT.md)参照。実データでの一連の使用例は
+[cdk20_investigation.ipynb](notebooks/cdk20_investigation.ipynb)セクション7・7.1。
+
+### `docking.receptor`
+
+| 関数 | 説明 |
+| --- | --- |
+| `prepare_flexible_receptor(structure_path: Path, flexible_residues: list[tuple[str, int]], output_basename: Path) -> FlexReceptor` | 構造ファイル(PDB/CIF)から受容体PDBQTを準備する。`flexible_residues`((chain_id, resnum)のリスト)で指定した残基だけをmeeko(`Polymer.flexibilize_sidechain`)で可動側鎖として切り出し`<output_basename>_flex.pdbqt`に、残りは`<output_basename>_rigid.pdbqt`に書き出す(Vinaの`--flex`/`--receptor`にそれぞれ対応)。受容体全体のトポロジーを`<output_basename>.json`(`polymer.to_json()`)にも書き出す(`docking.export.export_docked_poses`がドッキング後の受容体フルコンフォメーション復元に使う)。水素付加・電荷割当(Gasteiger)はmeekoが内部で行う。指定残基が構造中に見つからない場合は`ValueError`。 |
+| `FlexReceptor` | 準備結果(dataclass)。`rigid_pdbqt: Path`、`flex_pdbqt: Path \| None`(フレキシブル残基指定がなければ`None`)、`polymer_json: Path`、`n_flexible_residues: int`。 |
+
+### `docking.vina`
+
+| 関数 | 説明 |
+| --- | --- |
+| `calc_search_box(coords, padding: float = 4.0) -> tuple[tuple[float, float, float], tuple[float, float, float]]` | 座標配列(例: ポケット残基のCA座標)を包含するVina探索ボックスの中心・サイズ(Å)を計算する(meeko `gridbox.calc_box`のラッパー)。ポケット周辺残基のCAは既にポケットの縁まで広がっているため、paddingを大きくしすぎると探索空間が不必要に広がりドッキングが遅くなる。 |
+| `run_vina(rigid_pdbqt: Path, ligand_pdbqt: Path, center, size, output_path: Path, flex_pdbqt: Path \| None = None, exhaustiveness: int = 8, num_modes: int = 9, cpu: int \| None = None, seed: int = 0, vina_env: str = "vina") -> VinaResult` | `mamba run -n <vina_env> vina --receptor ... --flex ... --ligand ... --out ...`でドッキングを実行し、`parse_vina_output`で出力ポーズのスコアを取得して返す。vinaが非0で終了、または`mamba`/`conda`コマンドが見つからない場合は`RuntimeError`。フレキシブル残基数が多いほど探索空間が急激に広がり実行時間が伸びる(実測: 3残基でリガンド1件約10秒、19残基では1件が3分超でも完了しない)。 |
+| `parse_vina_output(output_path: Path) -> list[VinaPose]` | 出力PDBQTの`REMARK VINA RESULT:`行からポーズごとのスコアを抽出する(モード番号順)。`run_vina`が内部で使うほか、既に実行済みの出力(キャッシュ)を再読み込みする際にも呼べる。ポーズを1件も抽出できない場合は`ValueError`。 |
+| `VinaResult` | ドッキング結果(dataclass)。`poses: list[VinaPose]`(モード番号順)、`output_path: Path`、`best_affinity: float`(プロパティ、`poses[0].affinity`)。 |
+| `VinaPose` | 1ポーズ分のスコア(dataclass)。`mode: int`、`affinity: float`(kcal/mol)、`rmsd_lb: float`、`rmsd_ub: float`。 |
+
+### `docking.export`
+
+Vinaの`--out`出力自体にはリガンドポーズと可動側鎖(フレキシブル残基)の座標は含まれるが、受容体のリジッド
+部分は含まれない(`--receptor`に渡した`_rigid.pdbqt`は不変のまま使い回されるため)。インタラクション解析
+やMD初期構造として使える「ポーズごとの受容体フルコンフォメーション」を得るには、リジッド部分の構造
+(`prepare_flexible_receptor`が書き出す`polymer_json`)とドッキング後の可動側鎖の座標(Vina出力)を
+結合する必要があり、その結合をmeekoの`mk_export.py`(CLI)と同じ手順(`export_pdb_updated_flexres`)で行う。
+
+| 関数 | 説明 |
+| --- | --- |
+| `export_docked_poses(polymer_json: Path, vina_output_pdbqt: Path, output_dir: Path, name: str, modes: list[int] \| None = None) -> list[ExportedPose]` | Vina出力(リガンド+フレキシブル受容体のPDBQT)から、モードごとに受容体のフルコンフォメーション(リジッド部分+可動側鎖、標準PDB形式・水素付き)を`<output_dir>/<name>_mode<N>_receptor.pdb`に、リガンドポーズ(結合次数を復元したSDF)を`<output_dir>/<name>_mode<N>_ligand.sdf`に書き出す。`modes`省略時は全モードを書き出す(1始まり、Vinaのスコア順)。SDF変換に失敗した場合は`ValueError`。 |
+| `ExportedPose` | 1ポーズ分の書き出し結果(dataclass)。`mode: int`、`receptor_pdb: Path`、`ligand_sdf: Path`。 |

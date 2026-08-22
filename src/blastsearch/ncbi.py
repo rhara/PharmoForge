@@ -146,6 +146,30 @@ def fetch_hits(rid: str) -> list[dict]:
     return hits
 
 
+def format_evalue(evalue: float) -> str:
+    """e-valueを表示用に整形する。0はそのまま「0」、それ以外は有効数字2桁の指数表記
+    (例: 9.47e-95 -> 9.5e-95)にする。
+    """
+    return "0" if evalue == 0 else f"{evalue:.1e}"
+
+
+def best_hit_per_accession(hits: list[dict], exclude_accession: str | None = None) -> list[dict]:
+    """UniProt accessionごとに最良ヒット(evalue最小)だけを残し、evalue昇順で返す。
+
+    各ヒットの`subject_id`を`parse_uniprot_subject_id`でaccessionに変換し(`database="swissprot"`等の
+    ヒットを想定)、ヒットdictに`"accession"`キーを追加する。`exclude_accession`(クエリ自身の
+    accession等)を指定した場合はそのaccessionのヒットを除く。
+    """
+    best_by_accession: dict[str, dict] = {}
+    for h in hits:
+        acc = parse_uniprot_subject_id(h["subject_id"])
+        if exclude_accession is not None and acc == exclude_accession:
+            continue
+        if acc not in best_by_accession or h["evalue"] < best_by_accession[acc]["evalue"]:
+            best_by_accession[acc] = {**h, "accession": acc}
+    return sorted(best_by_accession.values(), key=lambda h: h["evalue"])
+
+
 def blast_search(
     sequence: str,
     program: str = "blastp",

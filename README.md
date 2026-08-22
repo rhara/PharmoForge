@@ -34,14 +34,15 @@
 | --- | --- |
 | `src/core` | 汎用ユーティリティ(verboseなログ出力等) |
 | `src/idmap` | 蛋白識別子マッピング(UniProt entry name / accession / ChEMBL target id相互変換)。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
-| `src/chembl` | ChEMBL REST APIからの活性データ取得。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
+| `src/chembl` | ChEMBL REST APIからの活性データ取得。当初`fetcher`固有だったがアトミックな技術要素として独立させた。複数標的にまたがる活性データの集計(化合物×標的要約・化合物単位ロールアップ・高活性化合物抽出)も提供 |
 | `src/molstd` | 化合物構造の標準化(RDKit標準の`rdMolStandardize`のみを用いた自前実装、外部パッケージ`chembl_structure_pipeline`には非依存)。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/rcsb` | RCSB PDBからの構造ファイルダウンロード。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/afdb` | AlphaFold DBからの構造ファイルダウンロード。当初`fetcher`固有だったがアトミックな技術要素として独立させた |
 | `src/uniprot` | UniProtエントリの取得・創薬向け情報抽出。当初`proteinanalyzer`固有だったがアトミックな技術要素として独立させた |
+| `src/blastsearch` | NCBI BLAST Web API(QBLAST)を用いた配列相同性検索。ジョブ投函・完了待機・ヒット取得に加え、ファイルキャッシュ付きの再開可能な実行(`run_cached_blast`)、ヒットの後処理(accessionごとの最良ヒット抽出、e-value表示整形)を提供 |
 | `src/molscaffold` | 化合物のBemis-Murckoスキャフォールド計算。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
 | `src/actbin` | 活性値の分位点ビニング(high/mid/low分類)。当初`scaffoldanalyzer`固有だったがアトミックな技術要素として独立させた |
-| `src/structfit` | 残基番号の対応のみに基づく剛体重ね合わせ計算(ProDy)。`alignview`(`--method number`)向けにアトミックな技術要素として切り出した |
+| `src/structfit` | 残基番号の対応のみに基づく剛体重ね合わせ計算(ProDy)。`alignview`(`--method number`)向けにアトミックな技術要素として切り出した。配列アラインメントで残基番号体系が異なる構造間の重ね合わせ、複数チェーンから目的の残基集合を最もよくカバーするチェーンの自動選択(`find_best_chain_for_residues`)も提供 |
 | `src/structio` | PDB/CIF構造ファイルの読み書き(拡張子で自動判別、ProDy)・`--indir`解決ロジック(`resolve_structure_tokens()`)。`structfit`/`proteinextract`/`alignview`/`sequencealign`の共通処理としてアトミックな技術要素に切り出した |
 | `src/seqextract` | 構造(ProDy Atomic)からの蛋白チェーン配列(1文字表記)+残基番号の抽出。当初`sequencealign`固有だったがアトミックな技術要素として独立させた |
 | `src/structcompare` | 構造間のチェーン単位配列比較(ProDyの`matchChains`ラッパー、%identity/%overlap・残基置換検出)。当初`sequencealign`固有だったがアトミックな技術要素として独立させた |
@@ -53,14 +54,20 @@
 | `src/proteinextract` | 構造ファイルから指定チェーンの抽出・水分子の除去([詳細](proteinextract/README.md)) |
 | `src/alignview` | 複数のPDB/CIF構造をPyMOLで開き先頭構造にアラインして表示([詳細](alignview/README.md)) |
 | `src/sequencealign` | 複数のPDB/CIF構造の蛋白配列比較(pairwise identity・残基番号ベースの整列表示)([詳細](sequencealign/README.md)) |
-| `src/pocket` | fpocketの実行・出力パース(ポケット記述子・周辺残基抽出)。当初`pocketfinder`固有だったがアトミックな技術要素として独立させた |
+| `src/pocket` | fpocketの実行・出力パース(ポケット記述子・周辺残基抽出)。当初`pocketfinder`固有だったがアトミックな技術要素として独立させた。既知のアンカー残基との重なりに基づくポケット選定(`select_pocket_by_anchor_overlap`)も提供 |
+| `src/kinasemotifs` | プロテインキナーゼドメインの保存モチーフ(P-loop/触媒Lys/HRD/DFG/DFG+1)を配列から検出する。ATP結合部位のアンカー残基特定等に使う |
+| `src/ligandcontacts` | 相同蛋白の複数のX線構造にまたがる、共結晶化リガンドの接触残基のコンセンサスを求める(一定割合以上の構造で再現された残基だけを採用) |
 | `src/pymolrun` | PyMOLスクリプトを専用conda/mamba環境で起動する(`mamba run -n <env> pymol <script>`)。当初`alignview`固有だったが`pocketfinder`(`pf view-pocket`)でも必要になりアトミックな技術要素として独立させた |
 | `src/pocketfinder` | fpocketによる蛋白ポケット検出・周辺残基一覧化・PyMOLでのポケット可視化CLI([詳細](pocketfinder/README.md)) |
+| `src/ligandprep` | SMILESからの3D配座生成・ドッキング用PDBQT変換(RDKit + meeko)([詳細](ligandprep/README.md)) |
+| `src/docking` | 受容体PDBQT準備(指定残基のフレキシブル化)・AutoDock Vinaの実行・結果パース・ポーズごとの受容体フルコンフォメーション(PDB)+リガンドポーズ(SDF)の復元([詳細](docking/README.md)) |
 
 `pf`コマンド自体は`src/core/cli.py`のclickグループが起点となり、各機能パッケージがサブコマンドを登録する。
 サブコマンド一覧は[`pf`コマンド一覧](#pfコマンド一覧)を参照。
 
-アトミックなパッケージ(`core`/`idmap`/`chembl`/`molstd`/`rcsb`/`afdb`/`uniprot`/`molscaffold`/`actbin`/`structfit`/`structio`/`seqextract`/`structcompare`/`seqalign`/`pocket`/`pymolrun`等)の関数一覧は[API.md](API.md)を参照。
+各パッケージの関数一覧(シグネチャ・挙動)は[API.md](API.md)を参照。`ligandprep`/`docking`のように
+root直下にREADME/PROMPTを持つ機能パッケージも、含まれる関数が再利用しうるものであればAPI.mdに記録する
+(root README/PROMPTとAPI.mdは役割が異なるため両方に記録される。詳細はAPI.md冒頭参照)。
 
 ## `pf`コマンド一覧
 
@@ -85,4 +92,7 @@
 
 - パッケージは可能な限りconda-forgeからインストールする。
 - RDKitは中核をなすライブラリの一つであり、`rdkit >= 2026.03.5` でpinする。
-- これを満たせないパッケージのインストールが必要な場合は、そのパッケージ専用の別環境を作る(該当数は多くないはず)。
+- これを満たせないパッケージのインストールが必要な場合は、そのパッケージ専用の別環境を作る(該当数は多くないはず)。現時点では以下の2つ:
+  - `pymol`環境(`mamba create -n pymol -c conda-forge pymol-open-source`): `pymolrun`が使用
+  - `vina`環境(`mamba create -n vina -c conda-forge python=3.14 vina`): `docking`が使用。vinaのconda-forgeビルドは`pharmoforge`環境のrdkitが要求するlibboost-pythonバージョンと競合するため分離している
+- `meeko`(および依存の`gemmi`)はconda-forgeのビルドがpython<3.14までにしか対応していないため、`pharmoforge`環境にpipでインストールする(`pyproject.toml`参照)。
